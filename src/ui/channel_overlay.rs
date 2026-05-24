@@ -9,6 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 const CHANNEL_LIST_WIDTH_RATIO: f64 = 0.60;
+const CHANNEL_ROW_EVENT_COLOR: &str = "#b6b6b6";
 
 pub struct ChannelOverlay {
     backdrop: gtk::Box,
@@ -398,8 +399,9 @@ impl ChannelOverlay {
 
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.set_valign(gtk::Align::Center);
-        let label = gtk::Label::new(Some(&channel_row_text(&channel)));
+        let label = gtk::Label::new(None);
         label.add_css_class("channel-row-title");
+        label.set_markup(&channel_row_markup(&channel));
         label.set_xalign(0.0);
         label.set_ellipsize(gtk::pango::EllipsizeMode::End);
         label.set_single_line_mode(true);
@@ -519,7 +521,8 @@ fn load_bouquet_epg(client: &Enigma2Client, bouquet: Bouquet) -> Result<LoadedBo
     }
 }
 
-fn channel_row_text(channel: &Channel) -> String {
+fn channel_row_markup(channel: &Channel) -> String {
+    let channel_text = glib::markup_escape_text(&format!("{} {}", channel.position, channel.name));
     let event_title = channel
         .epg
         .as_ref()
@@ -527,9 +530,13 @@ fn channel_row_text(channel: &Channel) -> String {
         .filter(|title| !title.is_empty())
         .unwrap_or("");
     if event_title.is_empty() {
-        format!("{} {}", channel.position, channel.name)
+        channel_text.to_string()
     } else {
-        format!("{} {}  {}", channel.position, channel.name, event_title)
+        let event_text = glib::markup_escape_text(event_title);
+        format!(
+            "{}  <span foreground=\"{}\">{}</span>",
+            channel_text, CHANNEL_ROW_EVENT_COLOR, event_text
+        )
     }
 }
 
