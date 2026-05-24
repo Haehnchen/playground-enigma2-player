@@ -1,8 +1,8 @@
 use enigma2_player_core::enigma2::model::EpgEvent;
 use enigma2_player_core::ui::epg_overlay::{
-    epg_body_layout_width, epg_panel_width, events_from_current_onward, progress_is_visible,
-    EPG_DETAIL_TITLE_MAX_LINES, EPG_DETAIL_TITLE_REQUEST_CHARS, EPG_HOVER_DETAIL_DELAY_MS,
-    EPG_MAX_EVENTS, EPG_OVERLAY_MAX_WIDTH,
+    epg_body_layout_width, epg_panel_width, event_row_meta_text, events_from_current_onward,
+    progress_is_visible, EPG_DETAIL_TITLE_MAX_LINES, EPG_DETAIL_TITLE_REQUEST_CHARS,
+    EPG_HOVER_DETAIL_DELAY_MS, EPG_MAX_EVENTS, EPG_OVERLAY_MAX_WIDTH,
 };
 
 #[test]
@@ -84,6 +84,46 @@ fn events_from_current_onward_limits_events() {
     assert_eq!(events_from_current_onward(events).len(), EPG_MAX_EVENTS);
 }
 
+#[test]
+fn event_row_meta_prefers_genre() {
+    let mut event = event("Tatort: Königinnen", 100, 60, 100);
+    event.genre = "Film/Drama".to_string();
+    event.shortdesc = "Fernsehfilm Deutschland 2022".to_string();
+
+    assert_eq!(event_row_meta_text(&event), "Film/Drama");
+}
+
+#[test]
+fn event_row_meta_uses_description_when_genre_is_missing() {
+    let mut event = event("Tagesthemen", 100, 60, 100);
+    event.shortdesc = "mit Wetter".to_string();
+
+    assert_eq!(event_row_meta_text(&event), "mit Wetter");
+}
+
+#[test]
+fn event_row_meta_uses_next_line_after_title_duplicate() {
+    let mut event = event("Atomic Blonde", 100, 60, 100);
+    event.shortdesc = "Atomic Blonde\nAction, USA 2017\nAltersfreigabe: ab 16".to_string();
+
+    assert_eq!(event_row_meta_text(&event), "Action, USA 2017");
+}
+
+#[test]
+fn event_row_meta_uses_dash_for_title_duplicate_without_genre() {
+    let mut event = event("Tagesschau", 100, 60, 100);
+    event.shortdesc = "Tagesschau".to_string();
+
+    assert_eq!(event_row_meta_text(&event), "-");
+}
+
+#[test]
+fn event_row_meta_uses_dash_when_no_meta_is_available() {
+    let event = event("Secret Headquarters", 100, 60, 100);
+
+    assert_eq!(event_row_meta_text(&event), "-");
+}
+
 fn event(title: &str, begin_timestamp: i64, duration_sec: i64, now_timestamp: i64) -> EpgEvent {
     EpgEvent {
         id: None,
@@ -92,6 +132,7 @@ fn event(title: &str, begin_timestamp: i64, duration_sec: i64, now_timestamp: i6
         title: title.to_string(),
         shortdesc: String::new(),
         longdesc: String::new(),
+        genre: String::new(),
         sref: "service-ref".to_string(),
         sname: "Das Erste HD".to_string(),
         now_timestamp,

@@ -374,16 +374,14 @@ impl EpgOverlay {
         title.set_hexpand(true);
         row.append(&title);
 
-        let description = event.description();
-        if !description.is_empty() {
-            let meta = gtk::Label::new(Some(first_line(&description)));
-            meta.add_css_class("epg-event-meta");
-            meta.set_xalign(0.0);
-            meta.set_ellipsize(gtk::pango::EllipsizeMode::End);
-            meta.set_single_line_mode(true);
-            meta.set_hexpand(true);
-            row.append(&meta);
-        }
+        let meta_text = event_row_meta_text(&event);
+        let meta = gtk::Label::new(Some(&meta_text));
+        meta.add_css_class("epg-event-meta");
+        meta.set_xalign(0.0);
+        meta.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        meta.set_single_line_mode(true);
+        meta.set_hexpand(true);
+        row.append(&meta);
 
         button.set_child(Some(&row));
 
@@ -584,8 +582,25 @@ fn event_row_markup(event: &EpgEvent) -> String {
     )
 }
 
-fn first_line(value: &str) -> &str {
-    value.lines().next().unwrap_or("")
+#[doc(hidden)]
+pub fn event_row_meta_text(event: &EpgEvent) -> String {
+    let genre = event.genre.trim();
+    if !genre.is_empty() {
+        return genre.to_string();
+    }
+
+    let title = event.title.trim();
+    first_meaningful_line(&event.description(), title)
+        .map(str::to_string)
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn first_meaningful_line<'a>(value: &'a str, title: &str) -> Option<&'a str> {
+    value
+        .lines()
+        .map(str::trim)
+        .filter(|line| title.is_empty() || *line != title)
+        .find(|line| !line.is_empty())
 }
 
 fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {

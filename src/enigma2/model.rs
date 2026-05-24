@@ -30,6 +30,8 @@ pub struct EpgEvent {
     pub shortdesc: String,
     #[serde(default, deserialize_with = "deserialize_normalized_text")]
     pub longdesc: String,
+    #[serde(default, deserialize_with = "deserialize_normalized_text")]
+    pub genre: String,
     #[serde(default)]
     pub sref: String,
     #[serde(default, deserialize_with = "deserialize_normalized_text")]
@@ -124,8 +126,11 @@ impl EpgEvent {
     }
 
     pub fn description(&self) -> String {
+        let title = normalize_epg_text(&self.title);
         let short = normalize_epg_text(&self.shortdesc);
         let long = normalize_epg_text(&self.longdesc);
+        let short = without_title_duplicate(short, &title);
+        let long = without_title_duplicate(long, &title);
         match (short.as_str(), long.as_str()) {
             ("", "") => String::new(),
             (short, "") => short.to_string(),
@@ -134,6 +139,22 @@ impl EpgEvent {
             (short, long) => format!("{short}\n\n{long}"),
         }
     }
+}
+
+fn without_title_duplicate(value: String, title: &str) -> String {
+    if title.is_empty() {
+        return value;
+    }
+
+    let mut lines = value.lines();
+    let Some(first) = lines.next() else {
+        return value;
+    };
+    if first.trim() != title {
+        return value;
+    }
+
+    lines.collect::<Vec<_>>().join("\n").trim().to_string()
 }
 
 pub fn normalize_epg_text(value: &str) -> String {

@@ -34,6 +34,7 @@ fn epg_now_response_deserializes_normalized_event_text() {
                 "title": "Radsport: Giro d&#x27;Italia",
                 "shortdesc": "Kurz",
                 "longdesc": "Lang &amp; sauber",
+                "genre": "Sport &amp; Freizeit",
                 "sref": "service-ref",
                 "sname": "Eurosport &amp; Co"
             }]
@@ -47,5 +48,6 @@ fn epg_now_response_deserializes_normalized_event_text() {
         format!("Radsport: Giro d{}Italia", char::from(39))
     );
     assert_eq!(event.sname, "Eurosport & Co");
+    assert_eq!(event.genre, "Sport & Freizeit");
     assert_eq!(event.description(), "Kurz\n\nLang & sauber");
 }

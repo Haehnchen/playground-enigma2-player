@@ -25,6 +25,7 @@ fn attach_epg_matches_events_by_service_reference() {
         title: "Heute".to_string(),
         shortdesc: "Kurz".to_string(),
         longdesc: "Lang".to_string(),
+        genre: "News".to_string(),
         sref: service_ref.to_string(),
         sname: "ZDF HD".to_string(),
         now_timestamp: 150,

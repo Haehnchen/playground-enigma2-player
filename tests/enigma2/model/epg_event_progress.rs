@@ -8,6 +8,7 @@ fn event_with_times(begin_timestamp: i64, duration_sec: i64, now_timestamp: i64)
         title: String::new(),
         shortdesc: String::new(),
         longdesc: String::new(),
+        genre: String::new(),
         sref: String::new(),
         sname: String::new(),
         now_timestamp,
