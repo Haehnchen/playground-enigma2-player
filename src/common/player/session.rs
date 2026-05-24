@@ -415,21 +415,44 @@ unsafe fn audio_track_from_node(node: &MpvNode) -> Option<AudioTrack> {
 }
 
 unsafe fn audio_track_label(node: &MpvNode, id: i64) -> String {
-    let title = map_value(node, "title")
-        .and_then(|node| node_string(node))
-        .filter(|value| !value.trim().is_empty());
-    let lang = map_value(node, "lang")
-        .and_then(|node| node_string(node))
-        .filter(|value| !value.trim().is_empty());
-
-    match (title, lang) {
+    let title = track_string(node, "title");
+    let lang = track_string(node, "lang");
+    let mut label = match (title, lang) {
         (Some(title), Some(lang)) if !title.eq_ignore_ascii_case(&lang) => {
             format!("{title} ({lang})")
         }
         (Some(title), _) => title,
         (_, Some(lang)) => lang,
         _ => format!("Audio {id}"),
+    };
+
+    let mut details = Vec::new();
+    if let Some(channels) = track_string(node, "demux-channels") {
+        details.push(channels.replace("(side)", ""));
+    } else if let Some(count) = map_value(node, "demux-channel-count")
+        .and_then(|node| node_int64(node))
+        .or_else(|| map_value(node, "audio-channels").and_then(|node| node_int64(node)))
+        .filter(|count| *count > 0)
+    {
+        details.push(format!("{count}ch"));
     }
+    if let Some(codec) = track_string(node, "codec") {
+        details.push(codec);
+    }
+
+    if !details.is_empty() {
+        label.push_str(" - ");
+        label.push_str(&details.join(" "));
+    }
+
+    label
+}
+
+unsafe fn track_string(node: &MpvNode, key: &str) -> Option<String> {
+    map_value(node, key)
+        .and_then(|node| node_string(node))
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 unsafe fn map_value<'a>(node: &'a MpvNode, key: &str) -> Option<&'a MpvNode> {
