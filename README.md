@@ -6,6 +6,12 @@ A lightweight GTK4/libmpv desktop player for Enigma2 receivers. It loads bouquet
   <img src="data/local.enigma2-player.svg" alt="Enigma2 Player icon" width="46">
 </p>
 
+## Preview
+
+<p align="center">
+  <img src="data/readme-channel-overlay.webp" alt="Enigma2 Player channel overlay" width="60%">
+</p>
+
 ## Receiver
 
 The receiver URL is stored in the user settings file:
