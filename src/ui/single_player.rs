@@ -23,6 +23,7 @@ pub struct SinglePlayer {
     video: Rc<MpvVideo>,
     client: Enigma2Client,
     channel_overlay: RefCell<Option<Rc<ChannelOverlay>>>,
+    current_service_ref: RefCell<Option<String>>,
     self_weak: RefCell<Weak<SinglePlayer>>,
     channel_button: gtk::Button,
     channel_label: gtk::Label,
@@ -111,6 +112,7 @@ impl SinglePlayer {
             video,
             client,
             channel_overlay: RefCell::new(None),
+            current_service_ref: RefCell::new(None),
             self_weak: RefCell::new(Weak::new()),
             channel_button,
             channel_label,
@@ -157,6 +159,7 @@ impl SinglePlayer {
 
     pub fn show_picker(&self) {
         if let Some(overlay) = self.channel_overlay.borrow().as_ref() {
+            overlay.set_current_service_ref(self.current_service_ref.borrow().as_deref());
             overlay.show();
         }
         self.show_player_overlay();
@@ -614,6 +617,7 @@ impl SinglePlayer {
         self.meta_label.set_text("Resolving stream...");
         match self.client.resolve_stream_url(&channel.service_ref) {
             Ok(url) => {
+                *self.current_service_ref.borrow_mut() = Some(channel.service_ref.clone());
                 self.session.borrow_mut().load_stream(&url, &channel.name);
                 self.channel_label.set_text(&channel.name);
                 self.empty_button.set_visible(false);
