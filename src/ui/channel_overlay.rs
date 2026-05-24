@@ -9,9 +9,11 @@ use std::thread;
 use std::time::Duration;
 
 const CHANNEL_LIST_WIDTH_RATIO: f64 = 0.60;
+const CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN: i32 = 36;
 const CHANNEL_ROW_EVENT_COLOR: &str = "#b6b6b6";
 
 pub struct ChannelOverlay {
+    root: gtk::Overlay,
     backdrop: gtk::Box,
     panel: gtk::Box,
     bouquet_title: gtk::Label,
@@ -28,6 +30,7 @@ pub struct ChannelOverlay {
     current_index: Cell<usize>,
     bouquet_count: Cell<usize>,
     current_bouquet: RefCell<Option<Bouquet>>,
+    current_service_ref: RefCell<Option<String>>,
     load_generation: Cell<u64>,
     on_activate: Box<dyn Fn(Channel)>,
     self_weak: RefCell<Weak<ChannelOverlay>>,
@@ -121,19 +124,38 @@ impl ChannelOverlay {
         {
             let scroller = scroller.clone();
             let detail = detail.clone();
+            let root = root.clone();
             body.connect_notify_local(Some("width"), move |body, _| {
-                position_channel_body(body, &scroller, &detail);
+                position_channel_body(body, &scroller, &detail, &root);
             });
         }
         {
             let body_for_map = body.clone();
             let scroller = scroller.clone();
             let detail = detail.clone();
+            let root = root.clone();
             body.connect_map(move |_| {
                 let body = body_for_map.clone();
                 let scroller = scroller.clone();
                 let detail = detail.clone();
-                glib::idle_add_local_once(move || position_channel_body(&body, &scroller, &detail));
+                let root = root.clone();
+                glib::idle_add_local_once(move || {
+                    position_channel_body(&body, &scroller, &detail, &root)
+                });
+            });
+        }
+        {
+            let body = body.clone();
+            let scroller = scroller.clone();
+            let detail = detail.clone();
+            let panel = panel.clone();
+            let root_for_signal = root.clone();
+            let root_for_position = root.clone();
+            root_for_signal.connect_notify_local(Some("width"), move |_, _| {
+                reset_channel_body_widths(&scroller, &detail);
+                if panel.is_visible() {
+                    position_channel_body(&body, &scroller, &detail, &root_for_position);
+                }
             });
         }
 
@@ -171,6 +193,7 @@ impl ChannelOverlay {
         detail_scroller.set_child(Some(&detail_description));
 
         let overlay = Rc::new(Self {
+            root: root.clone(),
             backdrop,
             panel,
             bouquet_title,
@@ -187,6 +210,7 @@ impl ChannelOverlay {
             current_index: Cell::new(0),
             bouquet_count: Cell::new(0),
             current_bouquet: RefCell::new(None),
+            current_service_ref: RefCell::new(None),
             load_generation: Cell::new(0),
             on_activate: Box::new(on_activate),
             self_weak: RefCell::new(Weak::new()),
@@ -219,6 +243,17 @@ impl ChannelOverlay {
         }
 
         overlay
+    }
+
+    pub fn set_current_service_ref(&self, service_ref: Option<&str>) {
+        *self.current_service_ref.borrow_mut() = service_ref
+            .map(str::trim)
+            .filter(|service_ref| !service_ref.is_empty())
+            .map(str::to_string);
+
+        if self.panel.is_visible() {
+            self.render_channels();
+        }
     }
 
     pub fn show(self: &Rc<Self>) {
@@ -354,8 +389,8 @@ impl ChannelOverlay {
             return;
         };
         let filter = self.search_entry.text().to_string().to_lowercase();
-        let mut first_visible: Option<Channel> = None;
-        let mut visible = 0;
+        let current_service_ref = self.current_service_ref.borrow().clone();
+        let mut detail_channel: Option<Channel> = None;
 
         for channel in bouquet.channels {
             if !filter.is_empty()
@@ -369,16 +404,17 @@ impl ChannelOverlay {
                 continue;
             }
 
-            if first_visible.is_none() {
-                first_visible = Some(channel.clone());
+            let selected = current_service_ref
+                .as_deref()
+                .is_some_and(|current| same_service_ref(current, &channel.service_ref));
+            if detail_channel.is_none() || selected {
+                detail_channel = Some(channel.clone());
             }
-            visible += 1;
-            let selected = visible == 1;
             self.list_box
                 .append(&self.create_channel_row(channel, selected));
         }
 
-        if let Some(channel) = first_visible {
+        if let Some(channel) = detail_channel {
             self.show_detail(&channel);
         } else {
             self.detail_title.set_text("No channels match");
@@ -479,13 +515,17 @@ impl ChannelOverlay {
         position_channel_body_for_width(
             &self.channel_list_scroll,
             &self.detail_pane,
-            self.channel_body.width(),
+            channel_body_layout_width(self.channel_body.width(), self.root.width()),
         );
     }
 
     fn reset_channel_body_widths(&self) {
         reset_channel_body_widths(&self.channel_list_scroll, &self.detail_pane);
     }
+}
+
+fn same_service_ref(left: &str, right: &str) -> bool {
+    left.trim() == right.trim()
 }
 
 fn load_bouquet_by_index(
@@ -547,12 +587,18 @@ fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {
     button.set_child(Some(&gtk::Image::from_icon_name(icon)));
     button
 }
+
 fn position_channel_body(
     body: &gtk::Box,
     list_scroll: &gtk::ScrolledWindow,
     detail_pane: &gtk::Box,
+    root: &gtk::Overlay,
 ) {
-    position_channel_body_for_width(list_scroll, detail_pane, body.width());
+    position_channel_body_for_width(
+        list_scroll,
+        detail_pane,
+        channel_body_layout_width(body.width(), root.width()),
+    );
 }
 
 fn reset_channel_body_widths(list_scroll: &gtk::ScrolledWindow, detail_pane: &gtk::Box) {
@@ -570,5 +616,55 @@ fn position_channel_body_for_width(
         let list_width = (width as f64 * CHANNEL_LIST_WIDTH_RATIO).round() as i32;
         list_scroll.set_size_request(list_width, -1);
         detail_pane.set_size_request((width - list_width).max(1), -1);
+    }
+}
+
+fn channel_body_layout_width(body_width: i32, root_width: i32) -> i32 {
+    if root_width <= 0 {
+        return body_width;
+    }
+
+    let root_available_width = (root_width - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN).max(1);
+    if body_width <= 0 {
+        return root_available_width;
+    }
+
+    body_width.min(root_available_width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{channel_body_layout_width, CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN};
+
+    #[test]
+    fn channel_body_layout_width_uses_current_body_width() {
+        let root_width = 1280;
+        let body_width = root_width - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN;
+
+        assert_eq!(
+            channel_body_layout_width(body_width, root_width),
+            body_width
+        );
+    }
+
+    #[test]
+    fn channel_body_layout_width_clamps_stale_fullscreen_width() {
+        let root_width = 1280;
+        let fullscreen_body_width = 1920 - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN;
+
+        assert_eq!(
+            channel_body_layout_width(fullscreen_body_width, root_width),
+            root_width - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN
+        );
+    }
+
+    #[test]
+    fn channel_body_layout_width_uses_root_width_before_body_allocation() {
+        let root_width = 1280;
+
+        assert_eq!(
+            channel_body_layout_width(0, root_width),
+            root_width - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN
+        );
     }
 }
