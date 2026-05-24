@@ -1,6 +1,7 @@
 use enigma2_player_core::enigma2::model::EpgEvent;
 use enigma2_player_core::ui::epg_overlay::{
     epg_body_layout_width, epg_panel_width, events_from_current_onward, progress_is_visible,
+    EPG_DETAIL_TITLE_MAX_LINES, EPG_DETAIL_TITLE_REQUEST_CHARS, EPG_HOVER_DETAIL_DELAY_MS,
     EPG_MAX_EVENTS, EPG_OVERLAY_MAX_WIDTH,
 };
 
@@ -39,6 +40,21 @@ fn progress_is_visible_only_for_positive_fraction() {
     assert!(!progress_is_visible(0.0));
     assert!(!progress_is_visible(-0.1));
     assert!(progress_is_visible(0.01));
+}
+
+#[test]
+fn hover_detail_delay_debounces_short_pointer_crossings() {
+    assert_eq!(EPG_HOVER_DETAIL_DELAY_MS, 50);
+}
+
+#[test]
+fn detail_title_is_limited_to_two_lines() {
+    assert_eq!(EPG_DETAIL_TITLE_MAX_LINES, 2);
+}
+
+#[test]
+fn detail_title_does_not_request_text_width() {
+    assert_eq!(EPG_DETAIL_TITLE_REQUEST_CHARS, 1);
 }
 
 #[test]

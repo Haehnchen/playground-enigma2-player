@@ -15,6 +15,13 @@ const EPG_OVERLAY_HORIZONTAL_MARGIN: i32 = 36;
 #[doc(hidden)]
 pub const EPG_OVERLAY_MAX_WIDTH: i32 = 1244;
 const EPG_ROW_TIME_COLOR: &str = "#b6b6b6";
+const EPG_DETAIL_TEXT_MAX_CHARS: i32 = 86;
+#[doc(hidden)]
+pub const EPG_DETAIL_TITLE_MAX_LINES: i32 = 2;
+#[doc(hidden)]
+pub const EPG_DETAIL_TITLE_REQUEST_CHARS: i32 = 1;
+#[doc(hidden)]
+pub const EPG_HOVER_DETAIL_DELAY_MS: u64 = 50;
 
 pub struct EpgOverlay {
     root: gtk::Overlay,
@@ -31,7 +38,7 @@ pub struct EpgOverlay {
     detail_description: gtk::Label,
     client: Enigma2Client,
     current_channel: RefCell<Option<Channel>>,
-    selected_event: RefCell<Option<EpgEvent>>,
+    hover_detail_source: RefCell<Option<glib::SourceId>>,
     load_generation: Cell<u64>,
     self_weak: RefCell<Weak<EpgOverlay>>,
 }
@@ -151,12 +158,23 @@ impl EpgOverlay {
         let detail_title = gtk::Label::new(Some("Select a programme"));
         detail_title.add_css_class("detail-title");
         detail_title.set_wrap(true);
+        detail_title.set_wrap_mode(gtk::pango::WrapMode::Char);
+        detail_title.set_natural_wrap_mode(gtk::NaturalWrapMode::Inherit);
+        detail_title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        detail_title.set_lines(EPG_DETAIL_TITLE_MAX_LINES);
+        detail_title.set_width_chars(EPG_DETAIL_TITLE_REQUEST_CHARS);
+        detail_title.set_max_width_chars(EPG_DETAIL_TITLE_REQUEST_CHARS);
         detail_title.set_xalign(0.0);
+        detail_title.set_halign(gtk::Align::Fill);
+        detail_title.set_overflow(gtk::Overflow::Hidden);
+        detail_title.set_hexpand(true);
         detail.append(&detail_title);
 
         let detail_time = gtk::Label::new(None);
         detail_time.add_css_class("detail-time");
         detail_time.set_xalign(0.0);
+        detail_time.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        detail_time.set_max_width_chars(EPG_DETAIL_TEXT_MAX_CHARS);
         detail.append(&detail_time);
 
         let detail_progress = gtk::ProgressBar::new();
@@ -176,6 +194,8 @@ impl EpgOverlay {
         let detail_description = gtk::Label::new(None);
         detail_description.add_css_class("detail-description");
         detail_description.set_wrap(true);
+        detail_description.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+        detail_description.set_max_width_chars(EPG_DETAIL_TEXT_MAX_CHARS);
         detail_description.set_xalign(0.0);
         detail_description.set_yalign(0.0);
         detail_description.set_vexpand(false);
@@ -196,7 +216,7 @@ impl EpgOverlay {
             detail_description,
             client,
             current_channel: RefCell::new(None),
-            selected_event: RefCell::new(None),
+            hover_detail_source: RefCell::new(None),
             load_generation: Cell::new(0),
             self_weak: RefCell::new(Weak::new()),
         });
@@ -217,6 +237,7 @@ impl EpgOverlay {
     }
 
     pub fn show_for_channel(self: &Rc<Self>, channel: Channel) {
+        self.cancel_pending_hover_detail();
         self.reset_epg_body_widths();
         self.set_panel_width();
         self.backdrop.set_visible(true);
@@ -241,13 +262,13 @@ impl EpgOverlay {
     }
 
     pub fn hide(&self) {
+        self.cancel_pending_hover_detail();
         self.invalidate_loads();
         self.backdrop.set_visible(false);
         self.panel.set_visible(false);
         self.clear_list();
         self.reset_epg_body_widths();
         *self.current_channel.borrow_mut() = None;
-        *self.selected_event.borrow_mut() = None;
     }
 
     pub fn is_visible(&self) -> bool {
@@ -260,7 +281,6 @@ impl EpgOverlay {
         let (sender, receiver) = mpsc::channel();
 
         self.clear_list();
-        *self.selected_event.borrow_mut() = None;
         self.detail_title.set_text("Loading EPG...");
         self.detail_time.set_text("");
         self.clear_detail_progress();
@@ -325,11 +345,9 @@ impl EpgOverlay {
     fn render_events(&self, events: Vec<EpgEvent>) {
         self.clear_list();
         let selected = events.first().cloned();
-        *self.selected_event.borrow_mut() = selected.clone();
 
-        for (index, event) in events.into_iter().enumerate() {
-            self.list_box
-                .append(&self.create_event_row(event, index == 0));
+        for event in events {
+            self.list_box.append(&self.create_event_row(event));
         }
 
         if let Some(event) = selected {
@@ -337,12 +355,9 @@ impl EpgOverlay {
         }
     }
 
-    fn create_event_row(&self, event: EpgEvent, selected: bool) -> gtk::Button {
+    fn create_event_row(&self, event: EpgEvent) -> gtk::Button {
         let button = gtk::Button::new();
         button.add_css_class("epg-event-row");
-        if selected {
-            button.add_css_class("epg-event-row-selected");
-        }
         button.set_has_frame(false);
         button.set_halign(gtk::Align::Fill);
 
@@ -377,13 +392,13 @@ impl EpgOverlay {
         let motion = gtk::EventControllerMotion::new();
         motion.connect_enter(move |_, _, _| {
             if let Some(overlay) = self_for_hover.upgrade() {
-                overlay.show_detail(&hover_event);
+                overlay.schedule_hover_detail(hover_event.clone());
             }
         });
         let self_for_leave = self.self_weak.borrow().clone();
         motion.connect_leave(move |_| {
             if let Some(overlay) = self_for_leave.upgrade() {
-                overlay.show_selected_detail();
+                overlay.cancel_pending_hover_detail();
             }
         });
         button.add_controller(motion);
@@ -419,9 +434,25 @@ impl EpgOverlay {
         self.detail_description.set_text(&event.description());
     }
 
-    fn show_selected_detail(&self) {
-        if let Some(event) = self.selected_event.borrow().as_ref() {
-            self.show_detail(event);
+    fn schedule_hover_detail(&self, event: EpgEvent) {
+        self.cancel_pending_hover_detail();
+
+        let self_weak = self.self_weak.borrow().clone();
+        let source = glib::timeout_add_local_once(
+            Duration::from_millis(EPG_HOVER_DETAIL_DELAY_MS),
+            move || {
+                if let Some(overlay) = self_weak.upgrade() {
+                    overlay.hover_detail_source.borrow_mut().take();
+                    overlay.show_detail(&event);
+                }
+            },
+        );
+        *self.hover_detail_source.borrow_mut() = Some(source);
+    }
+
+    fn cancel_pending_hover_detail(&self) {
+        if let Some(source) = self.hover_detail_source.borrow_mut().take() {
+            source.remove();
         }
     }
 
@@ -444,6 +475,7 @@ impl EpgOverlay {
     }
 
     fn clear_list(&self) {
+        self.cancel_pending_hover_detail();
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }

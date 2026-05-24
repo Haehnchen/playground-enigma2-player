@@ -241,12 +241,16 @@ impl Enigma2Client {
 }
 
 fn http_get(url: &str) -> Result<String, Enigma2Error> {
-    let agent = ureq::AgentBuilder::new().timeout(HTTP_TIMEOUT).build();
-    let response = agent
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(HTTP_TIMEOUT))
+        .build()
+        .into();
+    let mut response = agent
         .get(url)
         .call()
         .map_err(|err| Enigma2Error::Http(format!("{url}: {err}")))?;
     response
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .map_err(|err| Enigma2Error::Http(format!("{url}: {err}")))
 }

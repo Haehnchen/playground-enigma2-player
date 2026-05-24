@@ -401,8 +401,7 @@ window {
   color: rgba(255, 255, 255, 0.86);
 }
 
-.epg-event-row:hover,
-.epg-event-row-hover {
+.epg-event-row:hover {
   background: rgba(50, 84, 171, 0.56);
   background-image: none;
   border: none;
@@ -414,43 +413,13 @@ window {
   color: white;
 }
 
-.epg-event-row-selected {
-  background: rgba(50, 84, 171, 0.92);
-  background-image: none;
-  border: none;
-  border-width: 0;
-  box-shadow: none;
-  outline: none;
-  outline-width: 0;
-  outline-offset: 0;
-  color: white;
-}
-
-.epg-event-row-selected:hover,
-.epg-event-row-selected.epg-event-row-hover {
-  background: rgba(58, 94, 186, 0.96);
-  background-image: none;
-  border: none;
-  border-width: 0;
-  box-shadow: none;
-  outline: none;
-  outline-width: 0;
-  outline-offset: 0;
-}
-
-.epg-event-row label {
-  min-width: 0;
-}
-
 .epg-event-title {
   font-size: 15px;
-  min-width: 0;
 }
 
 .epg-event-meta {
   color: rgba(255, 255, 255, 0.62);
   font-size: 12px;
-  min-width: 0;
 }
 
 entry.overlay-search-entry,
