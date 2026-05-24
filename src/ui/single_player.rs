@@ -1,6 +1,7 @@
 use crate::common::player::icons::{self, WindowIcon};
 use crate::common::player::render::MpvVideo;
 use crate::common::player::session::PlayerSession;
+use crate::common::player::stream_settings::StreamSettingsPopover;
 use crate::enigma2::api::Enigma2Client;
 use crate::enigma2::model::Channel;
 use crate::settings::store::AppSettings;
@@ -47,6 +48,8 @@ pub struct SinglePlayer {
     move_press_y: Cell<f64>,
     mute_button: gtk::Button,
     epg_button: gtk::Button,
+    stream_settings_button: gtk::Button,
+    stream_settings_popover: StreamSettingsPopover,
     volume_scale: gtk::Scale,
 }
 
@@ -108,6 +111,9 @@ impl SinglePlayer {
         let epg_button = icon_button_child(icons::epg(), "Channel EPG");
         epg_button.add_css_class("epg-overlay-button");
         epg_button.set_visible(false);
+        let stream_settings_button = icon_button_child(icons::stream_settings(), "Stream settings");
+        stream_settings_button.add_css_class("stream-settings-button");
+        let stream_settings_popover = StreamSettingsPopover::new(&stream_settings_button);
         let volume_scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 130.0, 1.0);
         volume_scale.add_css_class("volume-scale");
         volume_scale.set_draw_value(false);
@@ -142,6 +148,8 @@ impl SinglePlayer {
             move_press_y: Cell::new(0.0),
             mute_button,
             epg_button,
+            stream_settings_button,
+            stream_settings_popover,
             volume_scale,
         });
         *player.self_weak.borrow_mut() = Rc::downgrade(&player);
@@ -296,14 +304,12 @@ impl SinglePlayer {
         refresh.set_margin_end(3);
         stream_selector.add_overlay(&refresh);
 
-        let info = icon_button("dialog-information-symbolic", "mpv stream info");
-
         footer.append(&stream_selector);
         footer.append(&stream_info);
         footer.append(&self.epg_button);
         footer.append(&self.mute_button);
         footer.append(&self.volume_scale);
-        footer.append(&info);
+        footer.append(&self.stream_settings_button);
         self.root.add_overlay(&footer);
         *self.footer_controls.borrow_mut() = Some(footer.clone());
 
@@ -319,9 +325,18 @@ impl SinglePlayer {
         }
         {
             let weak = Rc::downgrade(self);
-            info.connect_clicked(move |_| {
+            self.stream_settings_button.connect_clicked(move |_| {
+                if let Some(player) = weak.upgrade() {
+                    player.show_stream_settings();
+                }
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            self.stream_settings_popover.connect_info_clicked(move || {
                 if let Some(player) = weak.upgrade() {
                     player.session.borrow().toggle_stream_info();
+                    player.stream_settings_popover.popdown();
                     player.show_player_overlay();
                 }
             });
@@ -499,6 +514,7 @@ impl SinglePlayer {
                 .borrow()
                 .as_ref()
                 .is_some_and(|overlay| overlay.is_visible())
+            || self.stream_settings_popover.is_visible()
         {
             self.schedule_player_overlay_hide();
             return;
@@ -642,6 +658,34 @@ impl SinglePlayer {
         self.volume_scale.set_value(next);
         self.show_player_overlay();
         glib::Propagation::Stop
+    }
+
+    fn show_stream_settings(&self) {
+        if !self.session.borrow().is_playing() {
+            self.show_player_overlay();
+            return;
+        }
+
+        self.update_stream_settings_tracks();
+        self.stream_settings_popover.popup();
+        self.show_player_overlay();
+    }
+
+    fn update_stream_settings_tracks(&self) {
+        let tracks = self.session.borrow().audio_tracks();
+        let weak = self.self_weak.borrow().clone();
+        self.stream_settings_popover
+            .set_audio_tracks(&tracks, move |track_id| {
+                if let Some(player) = weak.upgrade() {
+                    player.select_audio_track(track_id);
+                }
+            });
+    }
+
+    fn select_audio_track(&self, track_id: i64) {
+        self.session.borrow_mut().set_audio_track(track_id);
+        self.stream_settings_popover.popdown();
+        self.show_player_overlay();
     }
 
     fn play_channel(&self, channel: Channel) {

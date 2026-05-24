@@ -126,6 +126,73 @@ window {
   padding: 3px;
 }
 
+.player-footer .stream-settings-button,
+.player-footer button.stream-settings-button {
+  min-width: 30px;
+  min-height: 28px;
+  padding: 2px 4px;
+}
+
+.stream-settings-popover contents {
+  background: rgba(28, 28, 28, 0.98);
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.stream-settings-menu {
+  background: rgba(28, 28, 28, 0.98);
+  padding: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.stream-settings-menu-with-audio {
+  min-width: 150px;
+}
+
+.stream-settings-heading {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+  margin-bottom: 0;
+}
+
+.stream-settings-divider {
+  background: rgba(255, 255, 255, 0.18);
+  min-height: 1px;
+  margin: 1px 0;
+}
+
+.stream-settings-item {
+  background: transparent;
+  color: white;
+  font-size: 12px;
+  border-color: transparent;
+  outline-color: transparent;
+  box-shadow: none;
+  border-radius: 4px;
+  margin: 0;
+  min-height: 0;
+  padding: 3px 6px;
+}
+
+.stream-settings-item label {
+  margin: 0;
+  padding: 0;
+}
+
+.stream-settings-item:hover {
+  background: rgba(74, 74, 74, 0.98);
+}
+
+.stream-settings-item-selected {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .stream-selector {
   min-width: 140px;
 }

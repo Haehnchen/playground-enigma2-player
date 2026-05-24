@@ -48,6 +48,69 @@ pub fn settings() -> gtk::DrawingArea {
     })
 }
 
+pub fn info() -> gtk::DrawingArea {
+    drawing_area(16, 16, |cr, width, height| {
+        let size = width.min(height) as f64;
+        let x = width as f64 / 2.0;
+        let y = height as f64 / 2.0;
+        let radius = size * 0.38;
+
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.94);
+        cr.set_line_width(1.7_f64.max(size * 0.08));
+        cr.arc(x, y, radius, 0.0, 2.0 * PI);
+        let _ = cr.stroke();
+
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
+        cr.move_to(x, y - radius * 0.05);
+        cr.line_to(x, y + radius * 0.50);
+        let _ = cr.stroke();
+
+        cr.arc(x, y - radius * 0.50, size * 0.045, 0.0, 2.0 * PI);
+        let _ = cr.fill();
+    })
+}
+
+pub fn stream_settings() -> gtk::DrawingArea {
+    drawing_area(20, 20, |cr, width, height| {
+        let size = width.min(height) as f64;
+        let cx = width as f64 / 2.0;
+        let cy = height as f64 / 2.0;
+        let outer = size * 0.38;
+        let tooth = size * 0.07;
+        let inner = size * 0.16;
+        let dirs = [
+            (1.0, 0.0),
+            (0.7071, 0.7071),
+            (0.0, 1.0),
+            (-0.7071, 0.7071),
+            (-1.0, 0.0),
+            (-0.7071, -0.7071),
+            (0.0, -1.0),
+            (0.7071, -0.7071),
+        ];
+
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        cr.set_line_width(1.7_f64.max(size * 0.10));
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
+        cr.set_line_join(gtk::cairo::LineJoin::Round);
+
+        for (dx, dy) in dirs {
+            cr.move_to(cx + dx * (outer - tooth), cy + dy * (outer - tooth));
+            cr.line_to(
+                cx + dx * (outer + tooth * 0.45),
+                cy + dy * (outer + tooth * 0.45),
+            );
+        }
+        let _ = cr.stroke();
+
+        cr.arc(cx, cy, outer - tooth * 0.7, 0.0, 2.0 * PI);
+        let _ = cr.stroke();
+
+        cr.arc(cx, cy, inner, 0.0, 2.0 * PI);
+        let _ = cr.stroke();
+    })
+}
+
 pub fn epg() -> gtk::DrawingArea {
     drawing_area(16, 16, |cr, width, height| {
         let size = width.min(height) as f64;
