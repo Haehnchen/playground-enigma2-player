@@ -53,7 +53,8 @@ fn desktop_entry(exec_path: &Path, icon_path: &Path) -> String {
     )
 }
 
-fn quote_desktop_path(path: &Path) -> String {
+#[doc(hidden)]
+pub fn quote_desktop_path(path: &Path) -> String {
     let raw = path.to_string_lossy();
     let mut quoted = String::with_capacity(raw.len() + 2);
     quoted.push('"');
@@ -65,18 +66,4 @@ fn quote_desktop_path(path: &Path) -> String {
     }
     quoted.push('"');
     quoted
-}
-
-#[cfg(test)]
-mod tests {
-    use super::quote_desktop_path;
-    use std::path::Path;
-
-    #[test]
-    fn quotes_desktop_exec_paths() {
-        assert_eq!(
-            quote_desktop_path(Path::new("/tmp/enigma2 player/$bin")),
-            r#""/tmp/enigma2 player/\$bin""#
-        );
-    }
 }

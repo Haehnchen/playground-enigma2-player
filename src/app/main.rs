@@ -9,10 +9,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Default)]
-struct CliOptions {
-    show_picker: bool,
-    start_first: bool,
-    box_url: Option<String>,
+#[doc(hidden)]
+pub struct CliOptions {
+    pub show_picker: bool,
+    pub start_first: bool,
+    pub box_url: Option<String>,
 }
 
 pub fn run_from_env() -> i32 {
@@ -133,7 +134,8 @@ fn toggle_window_fullscreen(
     next
 }
 
-fn parse_args(args: impl Iterator<Item = String>) -> CliOptions {
+#[doc(hidden)]
+pub fn parse_args(args: impl Iterator<Item = String>) -> CliOptions {
     let mut options = CliOptions::default();
     let mut args = args.peekable();
     while let Some(arg) = args.next() {
@@ -152,37 +154,4 @@ fn parse_args(args: impl Iterator<Item = String>) -> CliOptions {
         }
     }
     options
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_args;
-
-    #[test]
-    fn parses_launch_flags() {
-        let options = parse_args(
-            ["--show-picker", "--start-first"]
-                .into_iter()
-                .map(String::from),
-        );
-        assert!(options.show_picker);
-        assert!(options.start_first);
-    }
-
-    #[test]
-    fn parses_box_url_flag_forms() {
-        let options = parse_args(
-            ["--box-url", "receiver.local"]
-                .into_iter()
-                .map(String::from),
-        );
-        assert_eq!(options.box_url.as_deref(), Some("receiver.local"));
-
-        let options = parse_args(
-            ["--box-url=http://receiver.local"]
-                .into_iter()
-                .map(String::from),
-        );
-        assert_eq!(options.box_url.as_deref(), Some("http://receiver.local"));
-    }
 }

@@ -9,7 +9,8 @@ use std::thread;
 use std::time::Duration;
 
 const CHANNEL_LIST_WIDTH_RATIO: f64 = 0.60;
-const CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN: i32 = 36;
+#[doc(hidden)]
+pub const CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN: i32 = 36;
 const CHANNEL_ROW_EVENT_COLOR: &str = "#b6b6b6";
 
 pub struct ChannelOverlay {
@@ -619,7 +620,8 @@ fn position_channel_body_for_width(
     }
 }
 
-fn channel_body_layout_width(body_width: i32, root_width: i32) -> i32 {
+#[doc(hidden)]
+pub fn channel_body_layout_width(body_width: i32, root_width: i32) -> i32 {
     if root_width <= 0 {
         return body_width;
     }
@@ -630,41 +632,4 @@ fn channel_body_layout_width(body_width: i32, root_width: i32) -> i32 {
     }
 
     body_width.min(root_available_width)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{channel_body_layout_width, CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN};
-
-    #[test]
-    fn channel_body_layout_width_uses_current_body_width() {
-        let root_width = 1280;
-        let body_width = root_width - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN;
-
-        assert_eq!(
-            channel_body_layout_width(body_width, root_width),
-            body_width
-        );
-    }
-
-    #[test]
-    fn channel_body_layout_width_clamps_stale_fullscreen_width() {
-        let root_width = 1280;
-        let fullscreen_body_width = 1920 - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN;
-
-        assert_eq!(
-            channel_body_layout_width(fullscreen_body_width, root_width),
-            root_width - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN
-        );
-    }
-
-    #[test]
-    fn channel_body_layout_width_uses_root_width_before_body_allocation() {
-        let root_width = 1280;
-
-        assert_eq!(
-            channel_body_layout_width(0, root_width),
-            root_width - CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN
-        );
-    }
 }
