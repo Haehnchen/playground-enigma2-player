@@ -1,0 +1,25 @@
+[package]
+name = "enigma2-player"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+name = "enigma2_player_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "enigma2-player"
+path = "src/main.rs"
+
+[dependencies]
+gio = "0.21.5"
+glib = "0.21.5"
+gtk = { package = "gtk4", version = "0.10.3" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+ureq = { version = "2.12.1", default-features = false }
+url = "2.5.8"
+
+[profile.release]
+strip = "symbols"

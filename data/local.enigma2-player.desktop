@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Enigma2 Player
+Comment=Watch Dreambox and Enigma2 TV streams with mpv
+Exec=enigma2-player
+Icon=local.enigma2-player
+Terminal=false
+Categories=AudioVideo;Video;Player;TV;
+StartupNotify=true
