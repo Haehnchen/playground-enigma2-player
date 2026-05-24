@@ -173,6 +173,10 @@ window {
   min-width: 112px;
 }
 
+.epg-overlay-button {
+  margin-left: 2px;
+}
+
 .channel-overlay-backdrop {
   background: rgba(0, 0, 0, 0.55);
 }
@@ -301,6 +305,45 @@ window {
 .detail-description {
   font-size: 15px;
   line-height: 1.16;
+}
+
+.epg-overlay-panel {
+  margin: 46px 18px 48px 18px;
+}
+
+.epg-event-list {
+  padding: 6px 4px 10px 8px;
+}
+
+.epg-event-row {
+  min-height: 40px;
+  padding: 4px 7px;
+  border-radius: 2px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.epg-event-row:hover {
+  background: rgba(50, 84, 171, 0.56);
+  color: white;
+}
+
+.epg-event-row-selected {
+  background: rgba(50, 84, 171, 0.92);
+  color: white;
+}
+
+.epg-event-row-selected:hover {
+  background: rgba(58, 94, 186, 0.96);
+}
+
+.epg-event-title {
+  font-size: 15px;
+}
+
+.epg-event-meta {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
 }
 
 entry.overlay-search-entry,

@@ -19,6 +19,14 @@ pub fn epg_now_url(base_url: &str, bouquet_ref: &str) -> String {
     )
 }
 
+pub fn epg_service_url(base_url: &str, service_ref: &str) -> String {
+    format!(
+        "{}/api/epgservice?sRef={}",
+        normalize_base_url(base_url),
+        encode_query_value(service_ref)
+    )
+}
+
 pub fn stream_m3u_url(base_url: &str, service_ref: &str) -> String {
     format!(
         "{}/web/stream.m3u?ref={}",

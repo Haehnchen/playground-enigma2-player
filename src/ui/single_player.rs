@@ -5,6 +5,7 @@ use crate::enigma2::api::Enigma2Client;
 use crate::enigma2::model::Channel;
 use crate::settings::store::AppSettings;
 use crate::ui::channel_overlay::ChannelOverlay;
+use crate::ui::epg_overlay::EpgOverlay;
 use gtk::gdk::prelude::*;
 use gtk::glib;
 use gtk::prelude::*;
@@ -23,7 +24,9 @@ pub struct SinglePlayer {
     video: Rc<MpvVideo>,
     client: Enigma2Client,
     channel_overlay: RefCell<Option<Rc<ChannelOverlay>>>,
+    epg_overlay: RefCell<Option<Rc<EpgOverlay>>>,
     current_service_ref: RefCell<Option<String>>,
+    current_channel: RefCell<Option<Channel>>,
     self_weak: RefCell<Weak<SinglePlayer>>,
     channel_button: gtk::Button,
     channel_label: gtk::Label,
@@ -43,6 +46,7 @@ pub struct SinglePlayer {
     move_press_x: Cell<f64>,
     move_press_y: Cell<f64>,
     mute_button: gtk::Button,
+    epg_button: gtk::Button,
     volume_scale: gtk::Scale,
 }
 
@@ -101,6 +105,9 @@ impl SinglePlayer {
             icon_button_child(icons::window(WindowIcon::Fullscreen), "Fullscreen");
         let mute_button = icon_button_child(icons::volume(false), "Mute");
         mute_button.add_css_class("volume-mute-button");
+        let epg_button = icon_button_child(icons::epg(), "Channel EPG");
+        epg_button.add_css_class("epg-overlay-button");
+        epg_button.set_visible(false);
         let volume_scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 130.0, 1.0);
         volume_scale.add_css_class("volume-scale");
         volume_scale.set_draw_value(false);
@@ -112,7 +119,9 @@ impl SinglePlayer {
             video,
             client,
             channel_overlay: RefCell::new(None),
+            epg_overlay: RefCell::new(None),
             current_service_ref: RefCell::new(None),
+            current_channel: RefCell::new(None),
             self_weak: RefCell::new(Weak::new()),
             channel_button,
             channel_label,
@@ -132,6 +141,7 @@ impl SinglePlayer {
             move_press_x: Cell::new(0.0),
             move_press_y: Cell::new(0.0),
             mute_button,
+            epg_button,
             volume_scale,
         });
         *player.self_weak.borrow_mut() = Rc::downgrade(&player);
@@ -158,6 +168,9 @@ impl SinglePlayer {
     }
 
     pub fn show_picker(&self) {
+        if let Some(overlay) = self.epg_overlay.borrow().as_ref() {
+            overlay.hide();
+        }
         if let Some(overlay) = self.channel_overlay.borrow().as_ref() {
             overlay.set_current_service_ref(self.current_service_ref.borrow().as_deref());
             overlay.show();
@@ -287,6 +300,7 @@ impl SinglePlayer {
 
         footer.append(&stream_selector);
         footer.append(&stream_info);
+        footer.append(&self.epg_button);
         footer.append(&self.mute_button);
         footer.append(&self.volume_scale);
         footer.append(&info);
@@ -320,6 +334,9 @@ impl SinglePlayer {
             }
         });
         *self.channel_overlay.borrow_mut() = Some(overlay);
+
+        let epg_overlay = EpgOverlay::new(&self.root, self.client.clone());
+        *self.epg_overlay.borrow_mut() = Some(epg_overlay);
     }
 
     fn connect_controls(self: &Rc<Self>, on_fullscreen: Rc<dyn Fn() -> bool>) {
@@ -337,6 +354,15 @@ impl SinglePlayer {
             self.empty_button.connect_clicked(move |_| {
                 if let Some(player) = weak.upgrade() {
                     player.show_picker();
+                    player.show_player_overlay();
+                }
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            self.epg_button.connect_clicked(move |_| {
+                if let Some(player) = weak.upgrade() {
+                    player.show_epg_overlay();
                     player.show_player_overlay();
                 }
             });
@@ -468,6 +494,11 @@ impl SinglePlayer {
             .borrow()
             .as_ref()
             .is_some_and(|overlay| overlay.is_visible())
+            || self
+                .epg_overlay
+                .borrow()
+                .as_ref()
+                .is_some_and(|overlay| overlay.is_visible())
         {
             self.schedule_player_overlay_hide();
             return;
@@ -618,9 +649,11 @@ impl SinglePlayer {
         match self.client.resolve_stream_url(&channel.service_ref) {
             Ok(url) => {
                 *self.current_service_ref.borrow_mut() = Some(channel.service_ref.clone());
+                *self.current_channel.borrow_mut() = Some(channel.clone());
                 self.session.borrow_mut().load_stream(&url, &channel.name);
                 self.channel_label.set_text(&channel.name);
                 self.empty_button.set_visible(false);
+                self.epg_button.set_visible(true);
                 if let Some(event) = channel.epg {
                     self.title_label.set_text(&event.title);
                     self.meta_label
@@ -634,6 +667,18 @@ impl SinglePlayer {
             Err(err) => {
                 self.meta_label.set_text(&format!("Stream failed: {err}"));
             }
+        }
+    }
+
+    fn show_epg_overlay(&self) {
+        let Some(channel) = self.current_channel.borrow().clone() else {
+            return;
+        };
+        if let Some(overlay) = self.channel_overlay.borrow().as_ref() {
+            overlay.hide();
+        }
+        if let Some(overlay) = self.epg_overlay.borrow().as_ref() {
+            overlay.show_for_channel(channel);
         }
     }
 

@@ -1,5 +1,5 @@
 use super::model::{attach_epg, Bouquet, EpgEvent, EpgNowResponse, ServicesResponse};
-use super::urls::{epg_now_url, extract_stream_url, services_url, stream_m3u_url};
+use super::urls::{epg_now_url, epg_service_url, extract_stream_url, services_url, stream_m3u_url};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
@@ -43,6 +43,7 @@ struct ClientState {
     base_url: String,
     services_cache: Option<Cached<Vec<Bouquet>>>,
     epg_cache: HashMap<String, Cached<Vec<EpgEvent>>>,
+    service_epg_cache: HashMap<String, Cached<Vec<EpgEvent>>>,
 }
 
 #[derive(Clone)]
@@ -58,6 +59,7 @@ impl Enigma2Client {
                 base_url: super::urls::normalize_base_url(&base_url.into()),
                 services_cache: None,
                 epg_cache: HashMap::new(),
+                service_epg_cache: HashMap::new(),
             })),
             http_get: Arc::new(http_get),
         }
@@ -73,6 +75,7 @@ impl Enigma2Client {
                 base_url: super::urls::normalize_base_url(&base_url.into()),
                 services_cache: None,
                 epg_cache: HashMap::new(),
+                service_epg_cache: HashMap::new(),
             })),
             http_get: Arc::new(http_get),
         }
@@ -89,6 +92,7 @@ impl Enigma2Client {
             state.base_url = normalized;
             state.services_cache = None;
             state.epg_cache.clear();
+            state.service_epg_cache.clear();
         }
     }
 
@@ -96,6 +100,7 @@ impl Enigma2Client {
         let mut state = self.state.lock().unwrap();
         state.services_cache = None;
         state.epg_cache.clear();
+        state.service_epg_cache.clear();
     }
 
     fn configured_base_url(&self) -> Result<String, Enigma2Error> {
@@ -184,6 +189,39 @@ impl Enigma2Client {
         if state.base_url == base_url {
             state.epg_cache.insert(
                 bouquet_ref.to_string(),
+                Cached {
+                    value: parsed.events.clone(),
+                    fetched_at: Instant::now(),
+                },
+            );
+        }
+        Ok(parsed.events)
+    }
+
+    pub fn service_epg(&self, service_ref: &str) -> Result<Vec<EpgEvent>, Enigma2Error> {
+        let base_url = {
+            let state = self.state.lock().unwrap();
+            if let Some(cache) = state.service_epg_cache.get(service_ref) {
+                if cache.fetched_at.elapsed() < EPG_CACHE_TTL {
+                    return Ok(cache.value.clone());
+                }
+            }
+
+            if state.base_url.trim().is_empty() {
+                return Err(Enigma2Error::MissingSettings(
+                    "Dreambox URL is not configured in settings".to_string(),
+                ));
+            }
+            state.base_url.clone()
+        };
+
+        let body = (self.http_get)(&epg_service_url(&base_url, service_ref))?;
+        let parsed: EpgNowResponse =
+            serde_json::from_str(&body).map_err(|err| Enigma2Error::Json(err.to_string()))?;
+        let mut state = self.state.lock().unwrap();
+        if state.base_url == base_url {
+            state.service_epg_cache.insert(
+                service_ref.to_string(),
                 Cached {
                     value: parsed.events.clone(),
                     fetched_at: Instant::now(),

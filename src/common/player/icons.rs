@@ -48,6 +48,42 @@ pub fn settings() -> gtk::DrawingArea {
     })
 }
 
+pub fn epg() -> gtk::DrawingArea {
+    drawing_area(16, 16, |cr, width, height| {
+        let size = width.min(height) as f64;
+        let x = (width as f64 - size) / 2.0;
+        let y = (height as f64 - size) / 2.0;
+        let left = x + size * 0.18;
+        let right = x + size * 0.82;
+        let top = y + size * 0.14;
+        let bottom = y + size * 0.86;
+        let header_y = y + size * 0.32;
+
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.94);
+        cr.set_line_width(1.5_f64.max(size * 0.09));
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
+        cr.set_line_join(gtk::cairo::LineJoin::Round);
+
+        cr.rectangle(left, top, right - left, bottom - top);
+        let _ = cr.stroke();
+
+        cr.move_to(left, header_y);
+        cr.line_to(right, header_y);
+        cr.move_to(left + size * 0.19, top - size * 0.08);
+        cr.line_to(left + size * 0.19, top + size * 0.11);
+        cr.move_to(right - size * 0.19, top - size * 0.08);
+        cr.line_to(right - size * 0.19, top + size * 0.11);
+        let _ = cr.stroke();
+
+        cr.set_line_width(1.1_f64.max(size * 0.07));
+        for row in [0.48, 0.62, 0.76] {
+            cr.move_to(left + size * 0.13, y + size * row);
+            cr.line_to(right - size * 0.13, y + size * row);
+        }
+        let _ = cr.stroke();
+    })
+}
+
 pub fn window(kind: WindowIcon) -> gtk::DrawingArea {
     drawing_area(20, 20, move |cr, width, height| {
         let size = width.min(height) as f64;
