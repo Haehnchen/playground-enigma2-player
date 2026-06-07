@@ -14,6 +14,8 @@ const MPV_RENDER_PARAM_API_TYPE: c_int = 1;
 const MPV_RENDER_PARAM_OPENGL_INIT_PARAMS: c_int = 2;
 const MPV_RENDER_PARAM_OPENGL_FBO: c_int = 3;
 const MPV_RENDER_PARAM_FLIP_Y: c_int = 4;
+const MPV_RENDER_PARAM_ADVANCED_CONTROL: c_int = 5;
+const MPV_RENDER_UPDATE_FRAME: c_ulonglong = 1;
 
 #[repr(C)]
 struct MpvRenderContext {
@@ -148,6 +150,7 @@ impl MpvVideo {
             get_proc_address: Some(get_proc_address),
             get_proc_address_ctx: ptr::null_mut(),
         };
+        let mut advanced_control: c_int = 1;
         let mut params = [
             MpvRenderParam {
                 type_: MPV_RENDER_PARAM_API_TYPE,
@@ -156,6 +159,10 @@ impl MpvVideo {
             MpvRenderParam {
                 type_: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
                 data: &mut gl_init_params as *mut MpvOpenGLInitParams as *mut c_void,
+            },
+            MpvRenderParam {
+                type_: MPV_RENDER_PARAM_ADVANCED_CONTROL,
+                data: &mut advanced_control as *mut c_int as *mut c_void,
             },
             MpvRenderParam {
                 type_: MPV_RENDER_PARAM_INVALID,
@@ -193,9 +200,12 @@ impl MpvVideo {
             return;
         }
 
-        unsafe {
-            let _ = mpv_render_context_update(context);
+        let update_flags = unsafe { mpv_render_context_update(context) };
+        let size_changed = width != self.last_width.get() || height != self.last_height.get();
+        if (update_flags & MPV_RENDER_UPDATE_FRAME) == 0 && !size_changed {
+            return;
         }
+
         area.attach_buffers();
 
         let mut current_fbo = 0;
