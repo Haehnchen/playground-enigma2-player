@@ -8,7 +8,7 @@ BUILD_VERSION ?= nightly
 BUILD_DATE ?= $(shell date -u +%Y-%m-%d)
 RELEASE_BIN := $(CARGO_TARGET_DIR)/release/enigma2-player
 
-.PHONY: setup build test run install clean
+.PHONY: setup build check test run install clean
 
 setup:
 	CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" "$(CARGO)" fetch
@@ -16,6 +16,11 @@ setup:
 build:
 	BUILD_VERSION="$(BUILD_VERSION)" BUILD_DATE="$(BUILD_DATE)" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" "$(CARGO)" build --release
 	"$(STRIP)" $(STRIP_FLAGS) "$(RELEASE_BIN)"
+
+check:
+	"$(CARGO)" fmt --all -- --check
+	BUILD_VERSION="$(BUILD_VERSION)" BUILD_DATE="$(BUILD_DATE)" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" "$(CARGO)" clippy --all-targets -- -D warnings
+	$(MAKE) test
 
 test:
 	BUILD_VERSION="$(BUILD_VERSION)" BUILD_DATE="$(BUILD_DATE)" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" "$(CARGO)" test

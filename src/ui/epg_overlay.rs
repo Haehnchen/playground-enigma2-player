@@ -400,13 +400,7 @@ impl EpgOverlay {
     }
 
     fn show_detail(&self, event: &EpgEvent) {
-        let title = event
-            .title
-            .trim()
-            .is_empty()
-            .then_some("Untitled EPG event")
-            .unwrap_or(event.title.trim());
-        self.detail_title.set_text(title);
+        self.detail_title.set_text(event_title(event));
 
         let channel_name = if event.sname.trim().is_empty() {
             self.current_channel
@@ -560,15 +554,18 @@ fn current_unix_timestamp() -> i64 {
         .unwrap_or(0)
 }
 
+fn event_title(event: &EpgEvent) -> &str {
+    let title = event.title.trim();
+    if title.is_empty() {
+        "Untitled EPG event"
+    } else {
+        title
+    }
+}
+
 fn event_row_markup(event: &EpgEvent) -> String {
     let time_text = glib::markup_escape_text(&event.time_range());
-    let title = event
-        .title
-        .trim()
-        .is_empty()
-        .then_some("Untitled EPG event")
-        .unwrap_or(event.title.trim());
-    let title_text = glib::markup_escape_text(title);
+    let title_text = glib::markup_escape_text(event_title(event));
     format!(
         "<span foreground=\"{}\">{}</span>  {}",
         EPG_ROW_TIME_COLOR, time_text, title_text

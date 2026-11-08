@@ -496,10 +496,16 @@ unsafe fn node_string(node: &MpvNode) -> Option<String> {
 }
 
 unsafe fn node_int64(node: &MpvNode) -> Option<i64> {
-    (node.format == MPV_FORMAT_INT64).then(|| node.value.int64)
+    if node.format != MPV_FORMAT_INT64 {
+        return None;
+    }
+    Some(node.value.int64)
 }
 
 unsafe fn node_flag(node: Option<&MpvNode>) -> Option<bool> {
     let node = node?;
-    (node.format == MPV_FORMAT_FLAG).then(|| node.value.flag != 0)
+    if node.format != MPV_FORMAT_FLAG {
+        return None;
+    }
+    Some(node.value.flag != 0)
 }

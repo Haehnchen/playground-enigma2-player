@@ -1,5 +1,5 @@
 use gtk::prelude::*;
-use std::f64::consts::PI;
+use std::f64::consts::{FRAC_1_SQRT_2, PI};
 
 #[derive(Clone, Copy)]
 pub enum WindowIcon {
@@ -19,13 +19,13 @@ pub fn settings() -> gtk::DrawingArea {
         let inner = gear * 0.20;
         let dirs = [
             (1.0, 0.0),
-            (0.7071, 0.7071),
+            (FRAC_1_SQRT_2, FRAC_1_SQRT_2),
             (0.0, 1.0),
-            (-0.7071, 0.7071),
+            (-FRAC_1_SQRT_2, FRAC_1_SQRT_2),
             (-1.0, 0.0),
-            (-0.7071, -0.7071),
+            (-FRAC_1_SQRT_2, -FRAC_1_SQRT_2),
             (0.0, -1.0),
-            (0.7071, -0.7071),
+            (FRAC_1_SQRT_2, -FRAC_1_SQRT_2),
         ];
 
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.94);
@@ -80,13 +80,13 @@ pub fn stream_settings() -> gtk::DrawingArea {
         let inner = size * 0.16;
         let dirs = [
             (1.0, 0.0),
-            (0.7071, 0.7071),
+            (FRAC_1_SQRT_2, FRAC_1_SQRT_2),
             (0.0, 1.0),
-            (-0.7071, 0.7071),
+            (-FRAC_1_SQRT_2, FRAC_1_SQRT_2),
             (-1.0, 0.0),
-            (-0.7071, -0.7071),
+            (-FRAC_1_SQRT_2, -FRAC_1_SQRT_2),
             (0.0, -1.0),
-            (0.7071, -0.7071),
+            (FRAC_1_SQRT_2, -FRAC_1_SQRT_2),
         ];
 
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.95);
