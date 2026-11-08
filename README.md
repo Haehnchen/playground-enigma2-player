@@ -12,19 +12,6 @@ A lightweight GTK4/libmpv desktop player for Enigma2 receivers. It loads bouquet
   <img src="data/readme-channel-overlay.webp" alt="Enigma2 Player channel overlay" width="60%">
 </p>
 
-## Nightly downloads
-
-Download Linux x86_64 builds from [GitHub Releases](https://github.com/Haehnchen/playground-enigma2-player/releases). Each successful build after a push to `master` publishes a `nightly-<commit>` prerelease with a `.tar.zst` asset. The last 10 nightly releases are kept.
-
-Extract the downloaded `.tar.zst` archive and start the player:
-
-```bash
-tar --zstd -xf 'enigma2-player-linux-amd64-<commit>.tar.zst'
-./enigma2-player
-```
-
-Extraction requires `zstd`. The binary requires GTK4, libmpv, and libepoxy at runtime; builds are produced on Ubuntu 24.04.
-
 ## Receiver
 
 The receiver URL is stored in the user settings file:
