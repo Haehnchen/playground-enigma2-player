@@ -263,32 +263,22 @@ pub fn attach_epg(mut bouquet: Bouquet, events: &[EpgEvent]) -> Bouquet {
 }
 
 pub fn format_time(timestamp: i64) -> String {
-    use std::time::{Duration, UNIX_EPOCH};
+    format_time_in_timezone(timestamp, &glib::TimeZone::local())
+}
 
+fn format_time_in_timezone(timestamp: i64, timezone: &glib::TimeZone) -> String {
     if timestamp <= 0 {
         return "--:--".to_string();
     }
 
-    let datetime = UNIX_EPOCH + Duration::from_secs(timestamp as u64);
-    let local = chrono_like_local_time(datetime);
-    format!("{:02}:{:02}", local.0, local.1)
+    // Use the timezone rules for the event date, including daylight saving.
+    glib::DateTime::from_unix_utc(timestamp)
+        .and_then(|datetime| datetime.to_timezone(timezone))
+        .and_then(|datetime| datetime.format("%H:%M"))
+        .map(|formatted| formatted.to_string())
+        .unwrap_or_else(|_| "--:--".to_string())
 }
 
-fn chrono_like_local_time(time: std::time::SystemTime) -> (u64, u64) {
-    let seconds = time
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-    let local_seconds = seconds + local_offset_seconds();
-    ((local_seconds / 3600) % 24, (local_seconds / 60) % 60)
-}
-
-fn local_offset_seconds() -> u64 {
-    // The player is used locally and EPG timestamps from Enigma2 are Unix seconds.
-    // Keeping this small avoids pulling a full timezone dependency for UI labels.
-    let offset = std::env::var("TZ_OFFSET_SECONDS")
-        .ok()
-        .and_then(|value| value.parse::<i64>().ok())
-        .unwrap_or(2 * 3600);
-    offset.max(0) as u64
-}
+#[cfg(test)]
+#[path = "../../tests/enigma2/model/format_time.rs"]
+mod format_time_tests;
