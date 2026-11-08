@@ -23,10 +23,10 @@ pub enum Enigma2Error {
 impl fmt::Display for Enigma2Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingSettings(message) => write!(f, "{message}"),
-            Self::Http(message) => write!(f, "{message}"),
-            Self::Json(message) => write!(f, "{message}"),
-            Self::InvalidResponse(message) => write!(f, "{message}"),
+            Self::MissingSettings(message)
+            | Self::Http(message)
+            | Self::Json(message)
+            | Self::InvalidResponse(message) => f.write_str(message),
         }
     }
 }
@@ -39,11 +39,42 @@ struct Cached<T> {
     fetched_at: Instant,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum EpgEndpoint {
+    Now,
+    Service,
+}
+
+impl EpgEndpoint {
+    fn url(self, base_url: &str, reference: &str) -> String {
+        match self {
+            Self::Now => epg_now_url(base_url, reference),
+            Self::Service => epg_service_url(base_url, reference),
+        }
+    }
+}
+
+#[derive(Default)]
 struct ClientState {
     base_url: String,
     services_cache: Option<Cached<Vec<Bouquet>>>,
-    epg_cache: HashMap<String, Cached<Vec<EpgEvent>>>,
-    service_epg_cache: HashMap<String, Cached<Vec<EpgEvent>>>,
+    epg_cache: HashMap<(EpgEndpoint, String), Cached<Vec<EpgEvent>>>,
+}
+
+impl ClientState {
+    fn clear_cache(&mut self) {
+        self.services_cache = None;
+        self.epg_cache.clear();
+    }
+
+    fn configured_base_url(&self) -> Result<String, Enigma2Error> {
+        if self.base_url.is_empty() {
+            return Err(Enigma2Error::MissingSettings(
+                "Dreambox URL is not configured in settings".to_string(),
+            ));
+        }
+        Ok(self.base_url.clone())
+    }
 }
 
 #[derive(Clone)]
@@ -54,28 +85,17 @@ pub struct Enigma2Client {
 
 impl Enigma2Client {
     pub fn new(base_url: impl Into<String>) -> Self {
-        Self {
-            state: Arc::new(Mutex::new(ClientState {
-                base_url: super::urls::normalize_base_url(&base_url.into()),
-                services_cache: None,
-                epg_cache: HashMap::new(),
-                service_epg_cache: HashMap::new(),
-            })),
-            http_get: Arc::new(http_get),
-        }
+        Self::with_http_getter(base_url, http_get)
     }
 
-    #[doc(hidden)]
-    pub fn new_with_http_getter(
+    fn with_http_getter(
         base_url: impl Into<String>,
         http_get: impl Fn(&str) -> Result<String, Enigma2Error> + Send + Sync + 'static,
     ) -> Self {
         Self {
             state: Arc::new(Mutex::new(ClientState {
                 base_url: super::urls::normalize_base_url(&base_url.into()),
-                services_cache: None,
-                epg_cache: HashMap::new(),
-                service_epg_cache: HashMap::new(),
+                ..ClientState::default()
             })),
             http_get: Arc::new(http_get),
         }
@@ -90,27 +110,12 @@ impl Enigma2Client {
         let mut state = self.state.lock().unwrap();
         if state.base_url != normalized {
             state.base_url = normalized;
-            state.services_cache = None;
-            state.epg_cache.clear();
-            state.service_epg_cache.clear();
+            state.clear_cache();
         }
     }
 
     pub fn clear_cache(&self) {
-        let mut state = self.state.lock().unwrap();
-        state.services_cache = None;
-        state.epg_cache.clear();
-        state.service_epg_cache.clear();
-    }
-
-    fn configured_base_url(&self) -> Result<String, Enigma2Error> {
-        let base_url = self.state.lock().unwrap().base_url.clone();
-        if base_url.trim().is_empty() {
-            return Err(Enigma2Error::MissingSettings(
-                "Dreambox URL is not configured in settings".to_string(),
-            ));
-        }
-        Ok(base_url)
+        self.state.lock().unwrap().clear_cache();
     }
 
     pub fn bouquets(&self) -> Result<Vec<Bouquet>, Enigma2Error> {
@@ -122,12 +127,7 @@ impl Enigma2Client {
                 }
             }
 
-            if state.base_url.trim().is_empty() {
-                return Err(Enigma2Error::MissingSettings(
-                    "Dreambox URL is not configured in settings".to_string(),
-                ));
-            }
-            state.base_url.clone()
+            state.configured_base_url()?
         };
 
         let body = (self.http_get)(&services_url(&base_url))?;
@@ -166,62 +166,33 @@ impl Enigma2Client {
     }
 
     pub fn epg_now(&self, bouquet_ref: &str) -> Result<Vec<EpgEvent>, Enigma2Error> {
+        self.epg(EpgEndpoint::Now, bouquet_ref)
+    }
+
+    pub fn service_epg(&self, service_ref: &str) -> Result<Vec<EpgEvent>, Enigma2Error> {
+        self.epg(EpgEndpoint::Service, service_ref)
+    }
+
+    fn epg(&self, endpoint: EpgEndpoint, reference: &str) -> Result<Vec<EpgEvent>, Enigma2Error> {
+        let key = (endpoint, reference.to_string());
         let base_url = {
             let state = self.state.lock().unwrap();
-            if let Some(cache) = state.epg_cache.get(bouquet_ref) {
+            if let Some(cache) = state.epg_cache.get(&key) {
                 if cache.fetched_at.elapsed() < EPG_CACHE_TTL {
                     return Ok(cache.value.clone());
                 }
             }
 
-            if state.base_url.trim().is_empty() {
-                return Err(Enigma2Error::MissingSettings(
-                    "Dreambox URL is not configured in settings".to_string(),
-                ));
-            }
-            state.base_url.clone()
+            state.configured_base_url()?
         };
 
-        let body = (self.http_get)(&epg_now_url(&base_url, bouquet_ref))?;
+        let body = (self.http_get)(&endpoint.url(&base_url, reference))?;
         let parsed: EpgNowResponse =
             serde_json::from_str(&body).map_err(|err| Enigma2Error::Json(err.to_string()))?;
         let mut state = self.state.lock().unwrap();
         if state.base_url == base_url {
             state.epg_cache.insert(
-                bouquet_ref.to_string(),
-                Cached {
-                    value: parsed.events.clone(),
-                    fetched_at: Instant::now(),
-                },
-            );
-        }
-        Ok(parsed.events)
-    }
-
-    pub fn service_epg(&self, service_ref: &str) -> Result<Vec<EpgEvent>, Enigma2Error> {
-        let base_url = {
-            let state = self.state.lock().unwrap();
-            if let Some(cache) = state.service_epg_cache.get(service_ref) {
-                if cache.fetched_at.elapsed() < EPG_CACHE_TTL {
-                    return Ok(cache.value.clone());
-                }
-            }
-
-            if state.base_url.trim().is_empty() {
-                return Err(Enigma2Error::MissingSettings(
-                    "Dreambox URL is not configured in settings".to_string(),
-                ));
-            }
-            state.base_url.clone()
-        };
-
-        let body = (self.http_get)(&epg_service_url(&base_url, service_ref))?;
-        let parsed: EpgNowResponse =
-            serde_json::from_str(&body).map_err(|err| Enigma2Error::Json(err.to_string()))?;
-        let mut state = self.state.lock().unwrap();
-        if state.base_url == base_url {
-            state.service_epg_cache.insert(
-                service_ref.to_string(),
+                key,
                 Cached {
                     value: parsed.events.clone(),
                     fetched_at: Instant::now(),
@@ -232,7 +203,7 @@ impl Enigma2Client {
     }
 
     pub fn resolve_stream_url(&self, service_ref: &str) -> Result<String, Enigma2Error> {
-        let base_url = self.configured_base_url()?;
+        let base_url = self.state.lock().unwrap().configured_base_url()?;
         let body = (self.http_get)(&stream_m3u_url(&base_url, service_ref))?;
         extract_stream_url(&body).ok_or_else(|| {
             Enigma2Error::InvalidResponse("Dreambox stream playlist did not contain a URL".into())
@@ -254,3 +225,7 @@ fn http_get(url: &str) -> Result<String, Enigma2Error> {
         .read_to_string()
         .map_err(|err| Enigma2Error::Http(format!("{url}: {err}")))
 }
+
+#[cfg(test)]
+#[path = "../../tests/enigma2/api.rs"]
+mod tests;

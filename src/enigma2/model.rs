@@ -43,7 +43,7 @@ pub struct EpgEvent {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ServicesResponse {
+pub(super) struct ServicesResponse {
     #[serde(default)]
     pub result: bool,
     #[serde(default)]
@@ -51,7 +51,7 @@ pub struct ServicesResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ApiBouquet {
+pub(super) struct ApiBouquet {
     #[serde(default, deserialize_with = "deserialize_normalized_text")]
     pub servicename: String,
     #[serde(default)]
@@ -61,7 +61,7 @@ pub struct ApiBouquet {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ApiChannel {
+pub(super) struct ApiChannel {
     #[serde(default)]
     pub pos: u32,
     #[serde(default, deserialize_with = "deserialize_normalized_text")]
@@ -72,7 +72,7 @@ pub struct ApiChannel {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EpgNowResponse {
+pub(super) struct EpgNowResponse {
     #[serde(default)]
     pub events: Vec<EpgEvent>,
 }
@@ -280,5 +280,5 @@ fn format_time_in_timezone(timestamp: i64, timezone: &glib::TimeZone) -> String 
 }
 
 #[cfg(test)]
-#[path = "../../tests/enigma2/model/format_time.rs"]
-mod format_time_tests;
+#[path = "../../tests/enigma2/model.rs"]
+mod tests;

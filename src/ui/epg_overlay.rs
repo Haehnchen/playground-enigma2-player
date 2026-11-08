@@ -9,19 +9,14 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const EPG_LIST_WIDTH_RATIO: f64 = 0.48;
-#[doc(hidden)]
-pub const EPG_MAX_EVENTS: usize = 50;
+const EPG_MAX_EVENTS: usize = 50;
 const EPG_OVERLAY_HORIZONTAL_MARGIN: i32 = 36;
-#[doc(hidden)]
-pub const EPG_OVERLAY_MAX_WIDTH: i32 = 1244;
+const EPG_OVERLAY_MAX_WIDTH: i32 = 1244;
 const EPG_ROW_TIME_COLOR: &str = "#b6b6b6";
 const EPG_DETAIL_TEXT_MAX_CHARS: i32 = 86;
-#[doc(hidden)]
-pub const EPG_DETAIL_TITLE_MAX_LINES: i32 = 2;
-#[doc(hidden)]
-pub const EPG_DETAIL_TITLE_REQUEST_CHARS: i32 = 1;
-#[doc(hidden)]
-pub const EPG_HOVER_DETAIL_DELAY_MS: u64 = 50;
+const EPG_DETAIL_TITLE_MAX_LINES: i32 = 2;
+const EPG_DETAIL_TITLE_REQUEST_CHARS: i32 = 1;
+const EPG_HOVER_DETAIL_DELAY_MS: u64 = 50;
 
 pub struct EpgOverlay {
     root: gtk::Overlay,
@@ -520,8 +515,7 @@ impl EpgOverlay {
     }
 }
 
-#[doc(hidden)]
-pub fn events_from_current_onward(mut events: Vec<EpgEvent>) -> Vec<EpgEvent> {
+fn events_from_current_onward(mut events: Vec<EpgEvent>) -> Vec<EpgEvent> {
     events.sort_by_key(|event| (event.begin_timestamp.max(0), event.id.unwrap_or(0)));
     let now = events
         .iter()
@@ -555,8 +549,7 @@ fn event_is_current(event: &EpgEvent, now: i64) -> bool {
         && event.end_timestamp() > now
 }
 
-#[doc(hidden)]
-pub fn progress_is_visible(fraction: f64) -> bool {
+fn progress_is_visible(fraction: f64) -> bool {
     fraction > 0.0
 }
 
@@ -582,8 +575,7 @@ fn event_row_markup(event: &EpgEvent) -> String {
     )
 }
 
-#[doc(hidden)]
-pub fn event_row_meta_text(event: &EpgEvent) -> String {
+fn event_row_meta_text(event: &EpgEvent) -> String {
     let genre = event.genre.trim();
     if !genre.is_empty() {
         return genre.to_string();
@@ -628,8 +620,7 @@ fn set_epg_panel_width(panel: &gtk::Box, root_width: i32) {
     panel.set_size_request(epg_panel_width(root_width), -1);
 }
 
-#[doc(hidden)]
-pub fn epg_panel_width(root_width: i32) -> i32 {
+fn epg_panel_width(root_width: i32) -> i32 {
     let available_width = if root_width > 0 {
         root_width.saturating_sub(EPG_OVERLAY_HORIZONTAL_MARGIN)
     } else {
@@ -655,8 +646,7 @@ fn position_epg_body_for_width(
     }
 }
 
-#[doc(hidden)]
-pub fn epg_body_layout_width(body_width: i32, root_width: i32) -> i32 {
+fn epg_body_layout_width(body_width: i32, root_width: i32) -> i32 {
     let panel_width = epg_panel_width(root_width);
     if body_width <= 0 {
         panel_width
@@ -664,3 +654,7 @@ pub fn epg_body_layout_width(body_width: i32, root_width: i32) -> i32 {
         body_width.min(panel_width)
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/ui/epg_overlay.rs"]
+mod tests;

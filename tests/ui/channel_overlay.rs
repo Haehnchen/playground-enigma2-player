@@ -1,6 +1,4 @@
-use enigma2_player_core::ui::channel_overlay::{
-    channel_body_layout_width, CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN,
-};
+use super::*;
 
 #[test]
 fn channel_body_layout_width_uses_current_body_width() {

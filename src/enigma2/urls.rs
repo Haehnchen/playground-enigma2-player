@@ -35,7 +35,7 @@ pub fn stream_m3u_url(base_url: &str, service_ref: &str) -> String {
     )
 }
 
-pub fn encode_query_value(value: &str) -> String {
+fn encode_query_value(value: &str) -> String {
     url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
 }
 
@@ -45,3 +45,7 @@ pub fn extract_stream_url(m3u: &str) -> Option<String> {
         .find(|line| !line.is_empty() && !line.starts_with("#"))
         .map(ToString::to_string)
 }
+
+#[cfg(test)]
+#[path = "../../tests/enigma2/urls.rs"]
+mod tests;

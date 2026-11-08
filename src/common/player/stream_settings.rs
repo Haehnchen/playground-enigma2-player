@@ -174,11 +174,14 @@ fn clear_box(box_: &gtk::Box) {
     }
 }
 
-#[doc(hidden)]
-pub fn audio_tracks_in_menu_order(tracks: &[AudioTrack]) -> Vec<&AudioTrack> {
+fn audio_tracks_in_menu_order(tracks: &[AudioTrack]) -> Vec<&AudioTrack> {
     tracks
         .iter()
         .filter(|track| !track.selected)
         .chain(tracks.iter().filter(|track| track.selected))
         .collect()
 }
+
+#[cfg(test)]
+#[path = "../../../tests/common/player/stream_settings.rs"]
+mod tests;

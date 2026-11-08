@@ -9,11 +9,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Default)]
-#[doc(hidden)]
-pub struct CliOptions {
-    pub show_picker: bool,
-    pub start_first: bool,
-    pub box_url: Option<String>,
+struct CliOptions {
+    show_picker: bool,
+    start_first: bool,
+    box_url: Option<String>,
 }
 
 pub fn run_from_env() -> i32 {
@@ -141,10 +140,9 @@ fn toggle_window_fullscreen(
     next
 }
 
-#[doc(hidden)]
-pub fn parse_args(args: impl Iterator<Item = String>) -> CliOptions {
+fn parse_args(args: impl Iterator<Item = String>) -> CliOptions {
     let mut options = CliOptions::default();
-    let mut args = args.peekable();
+    let mut args = args;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--show-picker" => options.show_picker = true,
@@ -162,3 +160,7 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> CliOptions {
     }
     options
 }
+
+#[cfg(test)]
+#[path = "../../tests/app/cli.rs"]
+mod tests;

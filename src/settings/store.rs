@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub const BOX_URL_SCHEME_ERROR: &str =
     "Enter a Dreambox / Enigma2 URL starting with http:// or https://.";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
 pub struct AppSettings {
     pub box_url: String,
     pub hwdec: bool,
@@ -22,7 +23,7 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
-    pub fn normalized(mut self) -> Self {
+    fn normalized(mut self) -> Self {
         self.box_url = crate::enigma2::urls::normalize_base_url(&self.box_url);
         self
     }
@@ -45,7 +46,10 @@ pub fn validate_settings(settings: &AppSettings) -> Result<AppSettings, String> 
 }
 
 pub fn load() -> AppSettings {
-    let path = settings_path();
+    load_from(&settings_path())
+}
+
+fn load_from(path: &Path) -> AppSettings {
     let Ok(data) = fs::read_to_string(path) else {
         return AppSettings::default();
     };
@@ -63,9 +67,12 @@ pub fn load() -> AppSettings {
 }
 
 pub fn save(settings: &AppSettings) -> io::Result<()> {
+    save_to(settings, &settings_path())
+}
+
+fn save_to(settings: &AppSettings, path: &Path) -> io::Result<()> {
     let settings = validate_settings(settings)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
-    let path = settings_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -74,7 +81,7 @@ pub fn save(settings: &AppSettings) -> io::Result<()> {
     fs::write(path, data)
 }
 
-pub fn settings_path() -> PathBuf {
+fn settings_path() -> PathBuf {
     config_root().join("enigma2-player").join("settings.json")
 }
 
@@ -87,3 +94,7 @@ fn config_root() -> PathBuf {
     }
     PathBuf::from(".")
 }
+
+#[cfg(test)]
+#[path = "../../tests/settings/store.rs"]
+mod tests;

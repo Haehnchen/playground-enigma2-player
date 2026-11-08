@@ -9,8 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 const CHANNEL_LIST_WIDTH_RATIO: f64 = 0.60;
-#[doc(hidden)]
-pub const CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN: i32 = 36;
+const CHANNEL_OVERLAY_PANEL_HORIZONTAL_MARGIN: i32 = 36;
 const CHANNEL_ROW_EVENT_COLOR: &str = "#b6b6b6";
 
 pub struct ChannelOverlay {
@@ -620,8 +619,7 @@ fn position_channel_body_for_width(
     }
 }
 
-#[doc(hidden)]
-pub fn channel_body_layout_width(body_width: i32, root_width: i32) -> i32 {
+fn channel_body_layout_width(body_width: i32, root_width: i32) -> i32 {
     if root_width <= 0 {
         return body_width;
     }
@@ -633,3 +631,7 @@ pub fn channel_body_layout_width(body_width: i32, root_width: i32) -> i32 {
 
     body_width.min(root_available_width)
 }
+
+#[cfg(test)]
+#[path = "../../tests/ui/channel_overlay.rs"]
+mod tests;

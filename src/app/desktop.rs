@@ -53,8 +53,7 @@ fn desktop_entry(exec_path: &Path, icon_path: &Path) -> String {
     )
 }
 
-#[doc(hidden)]
-pub fn quote_desktop_path(path: &Path) -> String {
+fn quote_desktop_path(path: &Path) -> String {
     let raw = path.to_string_lossy();
     let mut quoted = String::with_capacity(raw.len() + 2);
     quoted.push('"');
@@ -67,3 +66,7 @@ pub fn quote_desktop_path(path: &Path) -> String {
     quoted.push('"');
     quoted
 }
+
+#[cfg(test)]
+#[path = "../../tests/app/desktop.rs"]
+mod tests;

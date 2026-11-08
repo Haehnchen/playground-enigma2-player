@@ -1,5 +1,4 @@
-use enigma2_player_core::common::player::session::AudioTrack;
-use enigma2_player_core::common::player::stream_settings::audio_tracks_in_menu_order;
+use super::*;
 
 fn track(id: i64, selected: bool) -> AudioTrack {
     AudioTrack {
