@@ -1,7 +1,7 @@
 use crate::app::desktop;
 use crate::common::player::{style, window_chrome};
 use crate::enigma2::api::Enigma2Client;
-use crate::settings::store::{load, validate_box_url, AppSettings};
+use crate::settings::store::{AppSettings, load, validate_box_url};
 use crate::settings::window::show as show_settings_window;
 use crate::ui::single_player::SinglePlayer;
 use gtk::prelude::*;
@@ -16,7 +16,6 @@ struct CliOptions {
 }
 
 pub fn run_from_env() -> i32 {
-    configure_rendering_defaults();
     desktop::write_user_desktop_identity();
     let options = parse_args(std::env::args().skip(1));
     let app = gtk::Application::builder()
@@ -118,12 +117,6 @@ pub fn run_from_env() -> i32 {
     });
 
     app.run_with_args(&["enigma2-player"]).into()
-}
-
-fn configure_rendering_defaults() {
-    if std::env::var_os("GSK_RENDERER").is_none() {
-        std::env::set_var("GSK_RENDERER", "gl");
-    }
 }
 
 fn toggle_window_fullscreen(

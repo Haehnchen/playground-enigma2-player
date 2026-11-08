@@ -204,11 +204,9 @@ fn decode_html_entities(value: &str) -> String {
             }
         }
 
-        if terminated {
-            if let Some(decoded) = decode_entity(&entity) {
-                output.push(decoded);
-                continue;
-            }
+        if terminated && let Some(decoded) = decode_entity(&entity) {
+            output.push(decoded);
+            continue;
         }
 
         output.push('&');

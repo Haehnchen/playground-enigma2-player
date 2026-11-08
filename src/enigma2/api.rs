@@ -1,4 +1,4 @@
-use super::model::{attach_epg, Bouquet, EpgEvent, EpgNowResponse, ServicesResponse};
+use super::model::{Bouquet, EpgEvent, EpgNowResponse, ServicesResponse, attach_epg};
 use super::urls::{epg_now_url, epg_service_url, extract_stream_url, services_url, stream_m3u_url};
 use std::collections::HashMap;
 use std::fmt;
@@ -121,10 +121,10 @@ impl Enigma2Client {
     pub fn bouquets(&self) -> Result<Vec<Bouquet>, Enigma2Error> {
         let base_url = {
             let state = self.state.lock().unwrap();
-            if let Some(cache) = &state.services_cache {
-                if cache.fetched_at.elapsed() < SERVICES_CACHE_TTL {
-                    return Ok(cache.value.clone());
-                }
+            if let Some(cache) = &state.services_cache
+                && cache.fetched_at.elapsed() < SERVICES_CACHE_TTL
+            {
+                return Ok(cache.value.clone());
             }
 
             state.configured_base_url()?
@@ -177,10 +177,10 @@ impl Enigma2Client {
         let key = (endpoint, reference.to_string());
         let base_url = {
             let state = self.state.lock().unwrap();
-            if let Some(cache) = state.epg_cache.get(&key) {
-                if cache.fetched_at.elapsed() < EPG_CACHE_TTL {
-                    return Ok(cache.value.clone());
-                }
+            if let Some(cache) = state.epg_cache.get(&key)
+                && cache.fetched_at.elapsed() < EPG_CACHE_TTL
+            {
+                return Ok(cache.value.clone());
             }
 
             state.configured_base_url()?

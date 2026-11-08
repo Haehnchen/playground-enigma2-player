@@ -535,12 +535,9 @@ impl SinglePlayer {
         let controller = gtk::EventControllerLegacy::new();
         {
             let weak = Rc::downgrade(self);
-            controller.connect_event(move |controller, event| {
-                if let Some(player) = weak.upgrade() {
-                    player.handle_window_move_event(controller, event)
-                } else {
-                    glib::Propagation::Proceed
-                }
+            controller.connect_event(move |controller, event| match weak.upgrade() {
+                Some(player) => player.handle_window_move_event(controller, event),
+                _ => glib::Propagation::Proceed,
             });
         }
         self.video.widget().add_controller(controller);
@@ -564,12 +561,12 @@ impl SinglePlayer {
                 let Some(button) = event.downcast_ref::<gtk::gdk::ButtonEvent>() else {
                     return glib::Propagation::Proceed;
                 };
-                if button.button() == 1 {
-                    if let Some((x, y)) = event.position() {
-                        self.move_pressed.set(true);
-                        self.move_press_x.set(x);
-                        self.move_press_y.set(y);
-                    }
+                if button.button() == 1
+                    && let Some((x, y)) = event.position()
+                {
+                    self.move_pressed.set(true);
+                    self.move_press_x.set(x);
+                    self.move_press_y.set(y);
                 }
                 glib::Propagation::Proceed
             }
@@ -618,12 +615,9 @@ impl SinglePlayer {
             gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
         {
             let weak = Rc::downgrade(self);
-            video_scroll.connect_scroll(move |_, dx, dy| {
-                if let Some(player) = weak.upgrade() {
-                    player.apply_volume_scroll(dx, dy)
-                } else {
-                    glib::Propagation::Proceed
-                }
+            video_scroll.connect_scroll(move |_, dx, dy| match weak.upgrade() {
+                Some(player) => player.apply_volume_scroll(dx, dy),
+                _ => glib::Propagation::Proceed,
             });
         }
         self.video.widget().add_controller(video_scroll);
@@ -632,12 +626,9 @@ impl SinglePlayer {
             gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
         {
             let weak = Rc::downgrade(self);
-            scale_scroll.connect_scroll(move |_, dx, dy| {
-                if let Some(player) = weak.upgrade() {
-                    player.apply_volume_scroll(dx, dy)
-                } else {
-                    glib::Propagation::Proceed
-                }
+            scale_scroll.connect_scroll(move |_, dx, dy| match weak.upgrade() {
+                Some(player) => player.apply_volume_scroll(dx, dy),
+                _ => glib::Propagation::Proceed,
             });
         }
         self.volume_scale.add_controller(scale_scroll);

@@ -1,5 +1,5 @@
 use crate::enigma2::api::Enigma2Client;
-use crate::enigma2::model::{attach_epg, Bouquet, Channel, EpgEvent};
+use crate::enigma2::model::{Bouquet, Channel, EpgEvent, attach_epg};
 use gtk::glib;
 use gtk::prelude::*;
 use std::cell::{Cell, RefCell};

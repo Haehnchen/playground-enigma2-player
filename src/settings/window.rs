@@ -1,4 +1,4 @@
-use super::store::{save, validate_settings, AppSettings};
+use super::store::{AppSettings, save, validate_settings};
 use gtk::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;

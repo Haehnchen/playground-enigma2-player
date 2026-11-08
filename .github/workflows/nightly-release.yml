@@ -22,6 +22,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup default stable
+
       - name: Cache Cargo build output
         uses: actions/cache@v4
         with:
@@ -38,14 +43,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential \
-            cargo \
             desktop-file-utils \
             libepoxy-dev \
             libgtk-4-dev \
             libmpv-dev \
             mpv \
             pkg-config \
-            rustc \
             zip
 
       - name: Verify dependencies
@@ -57,8 +60,8 @@ jobs:
       - name: Build
         run: make build
 
-      - name: Test
-        run: make test
+      - name: Check
+        run: make check
 
       - name: Set build metadata
         id: metadata

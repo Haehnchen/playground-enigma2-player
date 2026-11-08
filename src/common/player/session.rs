@@ -1,8 +1,7 @@
-use std::ffi::{c_char, c_double, c_int, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_double, c_int, c_void};
 use std::ptr;
 use std::slice;
 
-const LC_NUMERIC: c_int = 1;
 const MPV_FORMAT_STRING: c_int = 1;
 const MPV_FORMAT_FLAG: c_int = 3;
 const MPV_FORMAT_INT64: c_int = 4;
@@ -54,7 +53,7 @@ unsafe extern "C" {
         args: *const *const c_char,
     ) -> c_int;
     fn mpv_create() -> *mut MpvHandle;
-    fn mpv_error_string(error: c_int) -> *const c_char;
+    safe fn mpv_error_string(error: c_int) -> *const c_char;
     fn mpv_free_node_contents(node: *mut MpvNode);
     fn mpv_get_property(
         ctx: *mut MpvHandle,
@@ -80,7 +79,6 @@ unsafe extern "C" {
         data: *const c_char,
     ) -> c_int;
     fn mpv_terminate_destroy(ctx: *mut MpvHandle);
-    fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char;
 }
 
 pub struct PlayerSession {
@@ -134,17 +132,16 @@ impl PlayerSession {
         }
         self.volume = volume;
         let mut value = volume;
-        unsafe {
-            check_mpv(
-                mpv_set_property(
-                    self.mpv,
-                    cstr("volume").as_ptr(),
-                    MPV_FORMAT_DOUBLE,
-                    &mut value as *mut c_double as *mut c_void,
-                ),
-                "set volume",
-            );
-        }
+        // SAFETY: The live handle and double value remain valid throughout the call.
+        let status = unsafe {
+            mpv_set_property(
+                self.mpv,
+                c"volume".as_ptr(),
+                MPV_FORMAT_DOUBLE,
+                &mut value as *mut c_double as *mut c_void,
+            )
+        };
+        check_mpv(status, "set volume");
     }
 
     pub fn set_muted(&mut self, muted: bool) {
@@ -152,16 +149,7 @@ impl PlayerSession {
             return;
         }
         self.muted = muted;
-        unsafe {
-            check_mpv(
-                mpv_set_property_string(
-                    self.mpv,
-                    cstr("mute").as_ptr(),
-                    cstr(if muted { "yes" } else { "no" }).as_ptr(),
-                ),
-                "set mute",
-            );
-        }
+        self.set_string_property("mute", if muted { "yes" } else { "no" }, "set mute");
     }
 
     pub fn toggle_muted(&mut self) {
@@ -169,19 +157,11 @@ impl PlayerSession {
     }
 
     pub fn set_hwdec_enabled(&mut self, enabled: bool) {
-        if !self.is_ready() {
-            return;
-        }
-        unsafe {
-            check_mpv(
-                mpv_set_property_string(
-                    self.mpv,
-                    cstr("hwdec").as_ptr(),
-                    cstr(if enabled { "auto-safe" } else { "no" }).as_ptr(),
-                ),
-                "set hwdec",
-            );
-        }
+        self.set_string_property(
+            "hwdec",
+            if enabled { "auto-safe" } else { "no" },
+            "set hwdec",
+        );
     }
 
     pub fn load_stream(&mut self, url: &str, label: &str) {
@@ -192,9 +172,9 @@ impl PlayerSession {
         self.current_label = Some(label.to_string());
 
         let args = cargs(["loadfile", url, "replace"]);
-        unsafe {
-            check_mpv(mpv_command_async(self.mpv, 0, args.as_ptr()), "loadfile");
-        }
+        // SAFETY: mpv copies the terminated argument list before this call returns.
+        let status = unsafe { mpv_command_async(self.mpv, 0, args.as_ptr()) };
+        check_mpv(status, "loadfile");
     }
 
     pub fn audio_tracks(&self) -> Vec<AudioTrack> {
@@ -202,28 +182,31 @@ impl PlayerSession {
             return Vec::new();
         }
 
-        unsafe {
-            let mut node = MpvNode {
-                value: MpvNodeValue {
-                    list: ptr::null_mut(),
-                },
-                format: 0,
-            };
-            let status = mpv_get_property(
+        let mut node = MpvNode {
+            value: MpvNodeValue {
+                list: ptr::null_mut(),
+            },
+            format: 0,
+        };
+        // SAFETY: The live handle writes into a properly aligned MpvNode of the requested format.
+        let status = unsafe {
+            mpv_get_property(
                 self.mpv,
-                cstr("track-list").as_ptr(),
+                c"track-list".as_ptr(),
                 MPV_FORMAT_NODE,
                 &mut node as *mut MpvNode as *mut c_void,
-            );
-            if status < 0 {
-                log_mpv_error(status, "get audio tracks");
-                return Vec::new();
-            }
-
-            let tracks = audio_tracks_from_node(&node);
-            mpv_free_node_contents(&mut node);
-            tracks
+            )
+        };
+        if status < 0 {
+            log_mpv_error(status, "get audio tracks");
+            return Vec::new();
         }
+
+        // SAFETY: The successful query owns a valid node tree until it is freed below.
+        let tracks = unsafe { audio_tracks_from_node(&node) };
+        // SAFETY: This releases the successful query exactly once, after copying its data.
+        unsafe { mpv_free_node_contents(&mut node) };
+        tracks
     }
 
     pub fn set_audio_track(&mut self, id: i64) {
@@ -231,14 +214,7 @@ impl PlayerSession {
             return;
         }
 
-        let name = cstr("aid");
-        let value = cstr(&id.to_string());
-        unsafe {
-            check_mpv(
-                mpv_set_property_string(self.mpv, name.as_ptr(), value.as_ptr()),
-                "set audio track",
-            );
-        }
+        self.set_string_property("aid", &id.to_string(), "set audio track");
     }
 
     pub fn drop_buffers(&self) {
@@ -246,12 +222,9 @@ impl PlayerSession {
             return;
         }
         let args = cargs(["drop-buffers"]);
-        unsafe {
-            check_mpv(
-                mpv_command_async(self.mpv, 0, args.as_ptr()),
-                "drop buffers",
-            );
-        }
+        // SAFETY: The handle is live; mpv copies the terminated argument list on submission.
+        let status = unsafe { mpv_command_async(self.mpv, 0, args.as_ptr()) };
+        check_mpv(status, "drop buffers");
     }
 
     pub fn toggle_stream_info(&self) {
@@ -259,15 +232,13 @@ impl PlayerSession {
             return;
         }
         let args = cargs(["script-binding", "stats/display-stats-toggle"]);
-        unsafe {
-            let status = mpv_command(self.mpv, args.as_ptr());
-            if status < 0 {
-                let fallback = cargs(["keypress", "i"]);
-                check_mpv(
-                    mpv_command(self.mpv, fallback.as_ptr()),
-                    "toggle stream info",
-                );
-            }
+        // SAFETY: The handle is live and the terminated argument list outlives the call.
+        let status = unsafe { mpv_command(self.mpv, args.as_ptr()) };
+        if status < 0 {
+            let fallback = cargs(["keypress", "i"]);
+            // SAFETY: The fallback list has the same lifetime and termination guarantees.
+            let status = unsafe { mpv_command(self.mpv, fallback.as_ptr()) };
+            check_mpv(status, "toggle stream info");
         }
     }
 
@@ -275,64 +246,73 @@ impl PlayerSession {
         if !self.is_ready() || !self.is_playing() {
             return;
         }
-        unsafe {
-            check_mpv(
-                mpv_set_property_string(self.mpv, cstr("vid").as_ptr(), cstr("no").as_ptr()),
-                "disable video",
-            );
-            check_mpv(
-                mpv_set_property_string(self.mpv, cstr("vid").as_ptr(), cstr("auto").as_ptr()),
-                "enable video",
-            );
+        self.set_string_property("vid", "no", "disable video");
+        self.set_string_property("vid", "auto", "enable video");
+    }
+
+    fn set_string_property(&self, name: &str, value: &str, action: &str) {
+        if !self.is_ready() {
+            return;
         }
+        let name = cstr(name);
+        let value = cstr(value);
+        // SAFETY: The session owns the live handle and the C strings outlive the call.
+        let status = unsafe { mpv_set_property_string(self.mpv, name.as_ptr(), value.as_ptr()) };
+        check_mpv(status, action);
     }
 
     fn init(&mut self, hwdec: bool) {
-        unsafe {
-            let _ = setlocale(LC_NUMERIC, cstr("C").as_ptr());
-            self.mpv = mpv_create();
-            if self.mpv.is_null() {
-                eprintln!("mpv_create returned NULL");
-                return;
-            }
+        // SAFETY: The executable configures LC_NUMERIC before GTK and mpv start threads.
+        self.mpv = unsafe { mpv_create() };
+        if self.mpv.is_null() {
+            eprintln!("mpv_create returned NULL");
+            return;
+        }
 
-            self.set_option("terminal", "no");
-            self.set_option("config", "no");
-            self.set_option("vo", "libmpv");
-            self.set_option("hwdec", if hwdec { "auto-safe" } else { "no" });
-            // Enigma2 live TV is usually on the local network. Prefer quick zapping over
-            // collecting a large VOD-style cache before playback starts.
-            self.set_option("cache", "yes");
-            self.set_option("cache-pause-initial", "no");
-            self.set_option("cache-pause-wait", "0.25");
-            self.set_option("cache-secs", "2");
-            self.set_option("demuxer-max-bytes", "32MiB");
-            self.set_option("demuxer-readahead-secs", "1");
-            self.set_option("stream-buffer-size", "512KiB");
-            self.set_option("network-timeout", "3");
-            self.set_option("video-sync", "display-resample");
-            self.set_option("volume", "80");
+        self.set_option("terminal", "no");
+        self.set_option("config", "no");
+        self.set_option("vo", "libmpv");
+        self.set_option("hwdec", if hwdec { "auto-safe" } else { "no" });
+        // Enigma2 live TV is usually on the local network. Prefer quick zapping over
+        // collecting a large VOD-style cache before playback starts.
+        self.set_option("cache", "yes");
+        self.set_option("cache-pause-initial", "no");
+        self.set_option("cache-pause-wait", "0.25");
+        self.set_option("cache-secs", "2");
+        self.set_option("demuxer-max-bytes", "32MiB");
+        self.set_option("demuxer-readahead-secs", "1");
+        self.set_option("stream-buffer-size", "512KiB");
+        self.set_option("network-timeout", "3");
+        self.set_option("video-sync", "display-resample");
+        self.set_option("volume", "80");
 
-            let status = mpv_initialize(self.mpv);
-            if status < 0 {
-                log_mpv_error(status, "mpv initialize");
-                mpv_terminate_destroy(self.mpv);
-                self.mpv = ptr::null_mut();
-            }
+        // SAFETY: This session exclusively owns the newly created handle.
+        let status = unsafe { mpv_initialize(self.mpv) };
+        if status < 0 {
+            log_mpv_error(status, "mpv initialize");
+            // SAFETY: The failed handle is live and is cleared immediately after destruction.
+            unsafe { mpv_terminate_destroy(self.mpv) };
+            self.mpv = ptr::null_mut();
         }
     }
 
-    unsafe fn set_option(&self, name: &str, value: &str) {
-        check_mpv(
-            mpv_set_option_string(self.mpv, cstr(name).as_ptr(), cstr(value).as_ptr()),
-            name,
-        );
+    fn set_option(&self, name: &str, value: &str) {
+        if !self.is_ready() {
+            return;
+        }
+        let option_name = cstr(name);
+        let value = cstr(value);
+        // SAFETY: The session owns the live handle and the C strings outlive the call.
+        let status =
+            unsafe { mpv_set_option_string(self.mpv, option_name.as_ptr(), value.as_ptr()) };
+        check_mpv(status, name);
     }
 }
 
 impl Drop for PlayerSession {
     fn drop(&mut self) {
         if !self.mpv.is_null() {
+            // SAFETY: The session owns the handle; renderers retain the session until released.
             unsafe {
                 mpv_terminate_destroy(self.mpv);
             }
@@ -366,57 +346,67 @@ fn cargs<const N: usize>(values: [&str; N]) -> CArgs {
     }
 }
 
-unsafe fn check_mpv(status: c_int, action: &str) {
+fn check_mpv(status: c_int, action: &str) {
     if status < 0 {
         log_mpv_error(status, action);
     }
 }
 
-unsafe fn log_mpv_error(status: c_int, action: &str) {
+pub(super) fn log_mpv_error(status: c_int, action: &str) {
     let message = mpv_error_string(status);
     if message.is_null() {
         eprintln!("{action}: mpv error {status}");
     } else {
-        let message = std::ffi::CStr::from_ptr(message).to_string_lossy();
+        // SAFETY: mpv returns a static, NUL-terminated string for every error code.
+        let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
         eprintln!("{action}: {message}");
     }
 }
 
+/// # Safety
+/// The node and all reachable mpv allocations must remain valid throughout this call.
 unsafe fn audio_tracks_from_node(node: &MpvNode) -> Vec<AudioTrack> {
-    let Some(list) = node_list(node, MPV_FORMAT_NODE_ARRAY) else {
+    let Some(list) = (unsafe { node_list(node, MPV_FORMAT_NODE_ARRAY) }) else {
         return Vec::new();
     };
     if list.values.is_null() {
         return Vec::new();
     }
 
-    slice::from_raw_parts(list.values, list.num as usize)
-        .iter()
-        .filter_map(|node| audio_track_from_node(node))
-        .collect()
+    // SAFETY: The caller guarantees the mpv array and its children remain alive.
+    unsafe {
+        slice::from_raw_parts(list.values, list.num as usize)
+            .iter()
+            .filter_map(|node| audio_track_from_node(node))
+            .collect()
+    }
 }
 
+/// # Safety
+/// The node and all reachable mpv allocations must remain valid throughout this call.
 unsafe fn audio_track_from_node(node: &MpvNode) -> Option<AudioTrack> {
-    let track_type = node_string(map_value(node, "type")?)?;
+    let track_type = unsafe { node_string(map_value(node, "type")?) }?;
     if track_type != "audio" {
         return None;
     }
-    if node_flag(map_value(node, "albumart")).unwrap_or(false) {
+    if unsafe { node_flag(map_value(node, "albumart")) }.unwrap_or(false) {
         return None;
     }
 
-    let id = node_int64(map_value(node, "id")?)?;
-    let selected = node_flag(map_value(node, "selected")).unwrap_or(false);
+    let id = unsafe { node_int64(map_value(node, "id")?) }?;
+    let selected = unsafe { node_flag(map_value(node, "selected")) }.unwrap_or(false);
     Some(AudioTrack {
         id,
-        label: audio_track_label(node, id),
+        label: unsafe { audio_track_label(node, id) },
         selected,
     })
 }
 
+/// # Safety
+/// The node and all reachable mpv allocations must remain valid throughout this call.
 unsafe fn audio_track_label(node: &MpvNode, id: i64) -> String {
-    let title = track_string(node, "title");
-    let lang = track_string(node, "lang");
+    let title = unsafe { track_string(node, "title") };
+    let lang = unsafe { track_string(node, "lang") };
     let mut label = match (title, lang) {
         (Some(title), Some(lang)) if !title.eq_ignore_ascii_case(&lang) => {
             format!("{title} ({lang})")
@@ -427,16 +417,18 @@ unsafe fn audio_track_label(node: &MpvNode, id: i64) -> String {
     };
 
     let mut details = Vec::new();
-    if let Some(channels) = track_string(node, "demux-channels") {
+    if let Some(channels) = unsafe { track_string(node, "demux-channels") } {
         details.push(channels.replace("(side)", ""));
-    } else if let Some(count) = map_value(node, "demux-channel-count")
-        .and_then(|node| node_int64(node))
-        .or_else(|| map_value(node, "audio-channels").and_then(|node| node_int64(node)))
-        .filter(|count| *count > 0)
+    } else if let Some(count) = unsafe {
+        map_value(node, "demux-channel-count")
+            .and_then(|node| node_int64(node))
+            .or_else(|| map_value(node, "audio-channels").and_then(|node| node_int64(node)))
+    }
+    .filter(|count| *count > 0)
     {
         details.push(format!("{count}ch"));
     }
-    if let Some(codec) = track_string(node, "codec") {
+    if let Some(codec) = unsafe { track_string(node, "codec") } {
         details.push(codec);
     }
 
@@ -448,64 +440,85 @@ unsafe fn audio_track_label(node: &MpvNode, id: i64) -> String {
     label
 }
 
+/// # Safety
+/// The node and its keys and values must remain valid throughout this call.
 unsafe fn track_string(node: &MpvNode, key: &str) -> Option<String> {
-    map_value(node, key)
-        .and_then(|node| node_string(node))
+    unsafe { map_value(node, key).and_then(|node| node_string(node)) }
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
 }
 
+/// # Safety
+/// The node's keys and values must remain valid for the lifetime of the returned borrow.
 unsafe fn map_value<'a>(node: &'a MpvNode, key: &str) -> Option<&'a MpvNode> {
-    let list = node_list(node, MPV_FORMAT_NODE_MAP)?;
+    let list = unsafe { node_list(node, MPV_FORMAT_NODE_MAP) }?;
     if list.values.is_null() || list.keys.is_null() {
         return None;
     }
 
     for i in 0..list.num as usize {
-        let key_ptr = *list.keys.add(i);
+        // SAFETY: mpv guarantees num entries in both arrays for map nodes.
+        let key_ptr = unsafe { *list.keys.add(i) };
         if key_ptr.is_null() {
             continue;
         }
-        if CStr::from_ptr(key_ptr).to_bytes() == key.as_bytes() {
-            return Some(&*list.values.add(i));
+        if unsafe { CStr::from_ptr(key_ptr) }.to_bytes() == key.as_bytes() {
+            return Some(unsafe { &*list.values.add(i) });
         }
     }
     None
 }
 
+/// # Safety
+/// The format must be a list format, and its allocation must outlive the returned borrow.
 unsafe fn node_list(node: &MpvNode, format: c_int) -> Option<&MpvNodeList> {
     if node.format != format {
         return None;
     }
-    let list = node.value.list;
-    if list.is_null() || (*list).num < 0 {
-        return None;
-    }
-    Some(&*list)
+    // SAFETY: The caller keeps the mpv node alive, and the format identifies a list.
+    let list = unsafe { node.value.list.as_ref() }?;
+    (list.num >= 0).then_some(list)
 }
 
+/// # Safety
+/// A string node must contain a valid, live, NUL-terminated C string.
 unsafe fn node_string(node: &MpvNode) -> Option<String> {
     if node.format != MPV_FORMAT_STRING {
         return None;
     }
-    let value = node.value.string;
+    // SAFETY: The checked format selects the string field of the live mpv node.
+    let value = unsafe { node.value.string };
     if value.is_null() {
         return None;
     }
-    Some(CStr::from_ptr(value).to_string_lossy().into_owned())
+    Some(
+        unsafe { CStr::from_ptr(value) }
+            .to_string_lossy()
+            .into_owned(),
+    )
 }
 
+/// # Safety
+/// The union field identified by the node format must be initialized.
 unsafe fn node_int64(node: &MpvNode) -> Option<i64> {
     if node.format != MPV_FORMAT_INT64 {
         return None;
     }
-    Some(node.value.int64)
+    // SAFETY: The checked format selects the initialized integer field.
+    Some(unsafe { node.value.int64 })
 }
 
+/// # Safety
+/// The union field identified by the node format must be initialized.
 unsafe fn node_flag(node: Option<&MpvNode>) -> Option<bool> {
     let node = node?;
     if node.format != MPV_FORMAT_FLAG {
         return None;
     }
-    Some(node.value.flag != 0)
+    // SAFETY: The checked format selects the initialized flag field.
+    Some(unsafe { node.value.flag != 0 })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/common/player/session.rs"]
+mod tests;

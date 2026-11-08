@@ -1,7 +1,8 @@
 [package]
 name = "enigma2-player"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.92"
 build = "build.rs"
 
 [lib]
@@ -16,6 +17,7 @@ path = "src/main.rs"
 gio = "0.22.10"
 glib = "0.22.10"
 gtk = { package = "gtk4", version = "0.11.5", features = ["v4_6"] }
+libc = "0.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 ureq = { version = "3.5.1", default-features = false }

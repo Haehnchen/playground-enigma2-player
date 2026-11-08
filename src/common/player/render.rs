@@ -1,4 +1,4 @@
-use super::session::{MpvHandle, PlayerSession};
+use super::session::{MpvHandle, PlayerSession, log_mpv_error};
 use glib::Propagation;
 use gtk::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -48,7 +48,6 @@ unsafe extern "C" {
     static epoxy_glClearColor: unsafe extern "C" fn(f32, f32, f32, f32);
     static epoxy_glGetIntegerv: unsafe extern "C" fn(u32, *mut c_int);
 
-    fn mpv_error_string(error: c_int) -> *const c_char;
     fn mpv_render_context_create(
         res: *mut *mut MpvRenderContext,
         mpv: *mut MpvHandle,
@@ -106,9 +105,8 @@ impl MpvVideo {
         });
 
         let weak = Rc::downgrade(self);
-        self.area.connect_unrealize(move |area| {
+        self.area.connect_unrealize(move |_| {
             if let Some(video) = weak.upgrade() {
-                area.make_current();
                 video.clear_render_context();
             }
         });
@@ -124,13 +122,12 @@ impl MpvVideo {
 
     fn start_render_tick(self: &Rc<Self>) {
         let weak: Weak<Self> = Rc::downgrade(self);
-        glib::timeout_add_local(Duration::from_millis(33), move || {
-            if let Some(video) = weak.upgrade() {
+        glib::timeout_add_local(Duration::from_millis(33), move || match weak.upgrade() {
+            Some(video) => {
                 video.queue_render();
                 glib::ControlFlow::Continue
-            } else {
-                glib::ControlFlow::Break
             }
+            _ => glib::ControlFlow::Break,
         });
     }
 
@@ -171,6 +168,8 @@ impl MpvVideo {
         ];
 
         let mut render_context = ptr::null_mut();
+        // SAFETY: GTK made the GL context current, the session owns mpv, and params
+        // and their backing data remain alive until the synchronous call returns.
         let status =
             unsafe { mpv_render_context_create(&mut render_context, mpv, params.as_mut_ptr()) };
         if status < 0 {
@@ -186,6 +185,7 @@ impl MpvVideo {
         let context = self.render_context.get();
         if context.is_null() {
             area.attach_buffers();
+            // SAFETY: GTK invokes this callback with the area's GL context current.
             unsafe {
                 (epoxy_glClearColor)(0.02, 0.02, 0.02, 1.0);
                 (epoxy_glClear)(GL_COLOR_BUFFER_BIT);
@@ -200,6 +200,7 @@ impl MpvVideo {
             return;
         }
 
+        // SAFETY: The renderer owns this context and keeps the mpv session alive.
         let update_flags = unsafe { mpv_render_context_update(context) };
         let size_changed = width != self.last_width.get() || height != self.last_height.get();
         if (update_flags & MPV_RENDER_UPDATE_FRAME) == 0 && !size_changed {
@@ -209,6 +210,7 @@ impl MpvVideo {
         area.attach_buffers();
 
         let mut current_fbo = 0;
+        // SAFETY: The current GL context writes one integer into current_fbo.
         unsafe {
             (epoxy_glGetIntegerv)(GL_FRAMEBUFFER_BINDING, &mut current_fbo);
         }
@@ -233,6 +235,7 @@ impl MpvVideo {
                 data: ptr::null_mut(),
             },
         ];
+        // SAFETY: The context is current; the FBO and parameter data outlive this call.
         let status = unsafe { mpv_render_context_render(context, params.as_mut_ptr()) };
         if status < 0 {
             log_mpv_error(status, "mpv render");
@@ -245,6 +248,8 @@ impl MpvVideo {
     fn clear_render_context(&self) {
         let context = self.render_context.replace(ptr::null_mut());
         if !context.is_null() {
+            self.area.make_current();
+            // SAFETY: Release the owned render context once, with its GL context current.
             unsafe {
                 mpv_render_context_free(context);
             }
@@ -261,17 +266,6 @@ impl Drop for MpvVideo {
 }
 
 unsafe extern "C" fn get_proc_address(_ctx: *mut c_void, name: *const c_char) -> *mut c_void {
-    (epoxy_eglGetProcAddress)(name)
-}
-
-fn log_mpv_error(status: c_int, action: &str) {
-    unsafe {
-        let message = mpv_error_string(status);
-        if message.is_null() {
-            eprintln!("{action}: mpv error {status}");
-        } else {
-            let message = std::ffi::CStr::from_ptr(message).to_string_lossy();
-            eprintln!("{action}: {message}");
-        }
-    }
+    // SAFETY: mpv supplies the C string while the GL context is current.
+    unsafe { (epoxy_eglGetProcAddress)(name) }
 }
