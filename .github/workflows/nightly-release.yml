@@ -47,7 +47,7 @@ jobs:
             libmpv-dev \
             mpv \
             pkg-config \
-            zip
+            zstd
 
       - name: Verify dependencies
         run: bash scripts/check-deps.sh
@@ -68,7 +68,7 @@ jobs:
           short_sha="${GITHUB_SHA::7}"
           {
             echo "short_sha=$short_sha"
-            echo "archive=enigma2-player-linux-amd64-${short_sha}.zip"
+            echo "archive=enigma2-player-linux-amd64-${short_sha}.tar.zst"
             echo "tag=nightly-$short_sha"
           } >> "$GITHUB_OUTPUT"
 
@@ -78,7 +78,7 @@ jobs:
           archive="${{ steps.metadata.outputs.archive }}"
 
           strip --strip-unneeded target/release/enigma2-player
-          zip -j "$archive" target/release/enigma2-player
+          tar --zstd -cf "$archive" -C target/release enigma2-player
 
       - name: Create nightly release
         env:
